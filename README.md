@@ -7,7 +7,8 @@ Aplicación web ASP.NET Core MVC para publicar y administrar eventos y proyectos
 - Registro e inicio de sesión con contraseñas almacenadas mediante el hasher de ASP.NET Core.
 - Exploración de eventos y proyectos publicados, con páginas de detalle.
 - Creación y edición de eventos y proyectos, con flujos de aprobación y permisos por rol.
-- Inscripción a eventos y registro como colaborador de proyectos; consulta y cancelación de participaciones.
+- Inscripción a eventos con fecha de fin y cupo máximo opcional; solicitudes de colaboración sujetas a aprobación del organizador.
+- Consulta y cancelación de participaciones, con notificaciones de cambios y bajas.
 - Notificaciones sobre cambios y bajas de eventos y proyectos.
 - Administración de usuarios, carreras y publicaciones.
 - Página 404 para direcciones inválidas y recursos no disponibles.
@@ -21,21 +22,23 @@ Aplicación web ASP.NET Core MVC para publicar y administrar eventos y proyectos
 ## Configuración local
 
 1. Clona el repositorio y entra al directorio del proyecto.
-2. Crea la base de datos ejecutando una sola vez [`documentacion/GestionEventos.sql`](documentacion/GestionEventos.sql) en SQL Server. El script crea el esquema inicial, los roles y carreras de ejemplo.
-3. Configura la conexión por variable de entorno. Ejemplo con autenticación integrada:
+2. Configura la conexión por variable de entorno. Ejemplo con autenticación integrada:
 
    ```powershell
    $env:ConnectionStrings__GestionEventos = "Server=localhost;Database=GestionEventosUnison;Trusted_Connection=True;TrustServerCertificate=True"
    ```
 
    Si tu servidor requiere usuario y contraseña, obtén esos valores de un almacén de secretos local o del entorno de despliegue. No los agregues a `appsettings*.json` ni al repositorio.
-4. Restaura, compila e inicia la aplicación:
+3. Restaura la herramienta local de EF Core, compila e inicia la aplicación:
 
    ```powershell
+   dotnet tool restore
    dotnet restore
    dotnet build
    dotnet run --project GestionEventos.csproj
    ```
+
+En el primer inicio se crea el esquema con migraciones de EF Core. Al actualizar una base heredada reconocida, el arranque registra el esquema inicial como línea base y aplica la migración de modernización para conservar los registros. No se debe ejecutar un DDL separado. [`documentacion/GestionEventos.sql`](documentacion/GestionEventos.sql) contiene únicamente semillas opcionales. La aplicación también prepara roles y carreras de ejemplo idempotentemente.
 
 La aplicación inicia en la vista de exploración de eventos. También puede abrirse `GestionEventos.csproj` desde Visual Studio.
 
@@ -67,7 +70,7 @@ Las cuentas nuevas se asignan al rol de estudiante. Las funciones protegidas req
 | `Controllers/` | Acciones MVC, autenticación, permisos y flujos de negocio. |
 | `Models/` | Entidades persistidas en SQL Server. |
 | `ViewModels/` | Datos y validación para formularios. |
-| `Data/` | Contexto de Entity Framework Core y preparación del esquema. |
+| `Data/` | Contexto, migraciones de EF Core y semillas iniciales. |
 | `Views/` | Vistas Razor para las pantallas de la aplicación. |
 | `wwwroot/` | CSS, JavaScript, Bootstrap e imágenes estáticas. |
 | `documentacion/` | Script de base de datos y documentación funcional/técnica. |
@@ -78,9 +81,10 @@ Consulta la [guía técnica](documentacion/documentacion.md) para conocer el mod
 
 ```powershell
 dotnet build GestionEventos.csproj
+dotnet test tests/GestionEventos.Tests/GestionEventos.Tests.csproj
 ```
 
-El inicio y las pruebas funcionales requieren además una instancia de SQL Server con la base de datos preparada.
+Las pruebas usan SQLite en memoria; el inicio de la aplicación requiere además una instancia de SQL Server. GitHub Actions ejecuta compilación y pruebas en cada push y pull request.
 
 ## Seguridad y configuración
 

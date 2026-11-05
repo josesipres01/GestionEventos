@@ -12,26 +12,29 @@ La solución sigue el patrón Model-View-Controller (MVC) de ASP.NET Core. Los c
 - `Controllers/SolicitudesController.cs`: revisión de solicitudes y reactivaciones.
 - `Controllers/AdminController.cs`: administración de publicaciones, usuarios y carreras.
 - `Data/GestionEventosDbContext.cs`: configuración de entidades y relaciones.
-- `Data/InicializadorBaseDatos.cs`: preparación de esquema y datos iniciales.
+- `Data/Migrations/`: única fuente de cambios del esquema.
+- `Data/InicializadorBaseDatos.cs`: adopción de bases legadas reconocidas y semillas de datos iniciales.
 - `Models/`: entidades de usuario, rol, carrera, evento, proyecto, registros y notificaciones.
 - `Views/`: interfaz Razor.
 
 ## Modelo de datos
 
-El esquema principal está descrito en [`GestionEventos.sql`](GestionEventos.sql):
+El esquema se define exclusivamente en las migraciones de EF Core. El archivo [`GestionEventos.sql`](GestionEventos.sql) contiene solo datos semilla opcionales. El diagrama visual está en [`modelo-entidad-relacion.svg`](modelo-entidad-relacion.svg).
 
 | Tabla | Propósito |
 |---|---|
 | `ROLES` | Roles de estudiante, organizador/docente y administrador. |
 | `CARRERAS` | Carreras asociadas a usuarios y proyectos. |
 | `USUARIOS` | Perfil, correo único, rol, estado y hash de contraseña. |
-| `EVENTOS` | Publicaciones de eventos, organizador, solicitante y estado de aprobación. |
-| `PROYECTOS` | Publicaciones de proyectos, responsable, carrera y estado de aprobación. |
-| `REGISTROS` | Inscripciones de usuarios a eventos; único por usuario y evento. |
-| `REGISTROS_PROYECTOS` | Participación de colaboradores; única por usuario y proyecto. |
-| `NOTIFICACIONES` | Avisos dirigidos a usuarios sobre publicaciones y cambios. |
+| `EVENTOS` | Publicaciones con organizador, solicitante, revisor, eliminador, fecha de fin, cupo opcional y estado de aprobación controlado. |
+| `PROYECTOS` | Publicaciones con creador, organizador responsable, revisor, eliminador, carrera y estado de aprobación controlado. |
+| `REGISTROS` | Inscripciones de usuarios a eventos, con fecha; único por usuario y evento. |
+| `REGISTROS_PROYECTOS` | Solicitudes de colaboración con estado, revisión y fecha; único por usuario y proyecto. |
+| `NOTIFICACIONES` | Avisos con fecha y estado de lectura; asociados a un evento, a un proyecto o a ninguno. |
 
-Al dar de baja un evento o proyecto, la publicación se marca inactiva para conservar su historial y se notifica a los usuarios afectados. Las vistas públicas omiten publicaciones inactivas o pendientes de aprobación.
+Las referencias a usuarios usan `NO ACTION`: las cuentas deben desactivarse lógicamente para preservar historial. La baja de una publicación conserva sus registros y guarda quién la realizó. Los avisos de baja de proyectos se envían al creador y a los colaboradores aceptados.
+
+Las solicitudes de colaboración permanecen pendientes hasta que el organizador asignado las acepte o rechace. Solo los colaboradores aceptados se muestran como participantes. El cupo de un evento es opcional; cuando se define, las inscripciones se serializan y el servidor impide excederlo.
 
 ## Flujos principales
 
@@ -41,11 +44,14 @@ Al dar de baja un evento o proyecto, la publicación se marca inactiva para cons
 4. **Participación y avisos:** el usuario consulta y cancela sus registros desde su agenda. Las notificaciones se muestran en la vista de agenda.
 5. **Recursos no encontrados:** si una ruta es inválida o un recurso no está disponible, se muestra la vista 404 de la aplicación y se conserva el estado HTTP 404.
 
-## Inicialización de base de datos
+## Inicialización y migraciones
 
-1. Ejecuta `GestionEventos.sql` en una instancia de SQL Server nueva para crear la base de datos y el esquema base.
-2. Configura `ConnectionStrings__GestionEventos` fuera del repositorio.
-3. Inicia la aplicación. El arranque prepara algunos elementos de esquema y puede crear cuentas iniciales si las variables `BootstrapUsers__AdminEmail`, `BootstrapUsers__AdminPassword`, `BootstrapUsers__OrganizerEmail` y `BootstrapUsers__OrganizerPassword` están definidas.
+1. Crea una base vacía en SQL Server y configura `ConnectionStrings__GestionEventos` fuera del repositorio.
+2. Inicia la aplicación; `Database.Migrate()` crea o actualiza el esquema.
+3. Si la base contiene el esquema legado reconocido pero aún no tiene historial de EF Core, el arranque registra la migración inicial como línea base y aplica la migración de modernización. Un esquema parcial no reconocido provoca un error explícito para evitar alteraciones destructivas.
+4. Ejecuta `GestionEventos.sql` solo si quieres cargar manualmente las carreras/roles de ejemplo; no crea ni modifica tablas.
+
+Las migraciones preservan las inscripciones existentes a proyectos como aceptadas y derivan el organizador desde la relación previa o, como respaldo, desde el nombre guardado. Las cuentas iniciales se crean después de las migraciones si las variables `BootstrapUsers__AdminEmail`, `BootstrapUsers__AdminPassword`, `BootstrapUsers__OrganizerEmail` y `BootstrapUsers__OrganizerPassword` están definidas.
 
 Las credenciales de las cuentas iniciales no tienen valores predeterminados en el código. Deben proporcionarse por un almacén de secretos o variables de entorno; si falta una de las dos variables de una cuenta, el arranque reporta el error explícitamente.
 
@@ -70,6 +76,7 @@ Desde el directorio raíz:
 ```powershell
 dotnet restore
 dotnet build GestionEventos.csproj
+dotnet test tests/GestionEventos.Tests/GestionEventos.Tests.csproj
 ```
 
-La ejecución completa necesita SQL Server accesible y un esquema inicializado.
+Las pruebas usan una base SQLite efímera y cubren permisos/revisión de colaboradores, inscripciones duplicadas y cupo, baja del proyecto y notificaciones. El workflow `.github/workflows/dotnet.yml` ejecuta build y test en GitHub Actions. La ejecución de la aplicación requiere SQL Server accesible.
