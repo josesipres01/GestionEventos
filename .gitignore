@@ -1,0 +1,38 @@
+# .NET build output
+bin/
+obj/
+artifacts/
+
+# IDE and user-specific files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Local configuration and secrets
+appsettings*.json
+!appsettings.example.json
+.env
+.env.*
+!.env.example
+secrets.json
+*.publishsettings
+Properties/launchSettings.json
+*.pfx
+*.p12
+*.key
+*.pem
+
+# Local database files and backups
+*.mdf
+*.ldf
+*.bak
+*.bacpac
+wwwroot/uploads/
+
+# OS files
+.DS_Store
+Thumbs.db
