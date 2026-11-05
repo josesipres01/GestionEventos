@@ -1,0 +1,286 @@
+@model Evento
+@{
+    ViewData["Title"] = Model.Nombre;
+    var estaRegistrado = ViewBag.EstaRegistrado as bool? ?? false;
+    var puedeEditar = ViewBag.PuedeEditar as bool? ?? false;
+    var registros = Model.Registros
+        .OrderByDescending(r => r.FechaRegistro)
+        .ToList();
+
+    var nombreOrganizador = Model.Organizador is not null
+        ? string.Join(" ", new[] { Model.Organizador.Nombres, Model.Organizador.ApellidoPaterno, Model.Organizador.ApellidoMaterno }.Where(s => !string.IsNullOrWhiteSpace(s)))
+        : "Organizador UNISON";
+
+    string[] imagenesEventos =
+    [
+        "/img/evento-1.svg",
+        "/img/evento-2.svg",
+        "/img/evento-3.svg"
+    ];
+    var imagenPortada = !string.IsNullOrWhiteSpace(Model.ImagenUrl)
+        ? Model.ImagenUrl
+        : imagenesEventos[Math.Abs(Model.IdEvento) % imagenesEventos.Length];
+
+    static string ObtenerIniciales(string? texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto))
+        {
+            return "UN";
+        }
+
+        var partes = texto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return string.Concat(partes.Take(2).Select(p => char.ToUpperInvariant(p[0])));
+    }
+}
+
+<section class="nexo-section">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <a asp-controller="Eventos" asp-action="Index" class="btn-nexo-outline">
+            ← Volver a eventos
+        </a>
+        <div class="d-flex align-items-center gap-2">
+            @if (puedeEditar && Model.Activo)
+            {
+                <a asp-controller="Eventos" asp-action="Editar" asp-route-id="@Model.IdEvento" class="btn-nexo-outline">
+                    ✎ Editar evento
+                </a>
+            }
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <a asp-controller="Eventos" asp-action="MisRegistros" class="nexo-link-underline small">
+                    Ver mi agenda de registros
+                </a>
+            }
+        </div>
+    </div>
+
+    @if (TempData["Mensaje"] is string mensaje)
+    {
+        <div class="nexo-toast" role="status">
+            <span class="nexo-toast-dot">✓</span>
+            <span>@mensaje</span>
+        </div>
+    }
+
+    @if (!Model.Activo)
+    {
+        <div class="alert alert-secondary" role="status">
+            Este evento fue eliminado. Se conservaron sus datos e inscripciones, pero ya no está disponible para nuevas inscripciones.
+        </div>
+    }
+
+    <!-- Portada en grande del evento -->
+    <header class="nexo-detail-hero">
+        <img src="@imagenPortada" alt="@Model.Nombre" />
+        <div class="nexo-detail-hero-overlay">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <span class="badge bg-light text-dark fw-bold px-3 py-2 text-uppercase" style="border-left: 4px solid var(--nexo-lime);">
+                    EVENTO UNIVERSITARIO
+                </span>
+                <span class="badge rounded-pill px-3 py-2" style="background-color: rgba(215, 242, 90, 0.2); color: var(--nexo-lime);">
+                    @Model.Lugar
+                </span>
+            </div>
+
+            <h1 class="nexo-detail-title">@Model.Nombre</h1>
+
+            <div class="d-flex flex-wrap align-items-center gap-4 text-white-50 small">
+                <span><strong>Fecha y hora:</strong> <span class="text-white">@Model.FechaHora.ToString("dd 'de' MMMM 'de' yyyy · HH:mm")</span></span>
+                <span><strong>Lugar:</strong> <span class="text-white">@Model.Lugar</span></span>
+                <span><strong>Organiza:</strong> <span class="text-white">@nombreOrganizador</span></span>
+                <span><strong>Personas registradas:</strong> <span class="text-white">@registros.Count</span></span>
+            </div>
+        </div>
+    </header>
+
+    <div class="nexo-detail-grid">
+        <!-- Columna principal: Descripción y lista de asistentes registrados -->
+        <div class="d-flex flex-column gap-4">
+            <article class="nexo-panel">
+                <div class="nexo-eyebrow mb-2">
+                    <span class="nexo-eyebrow-dot"></span>
+                    <span>DETALLES DEL EVENTO</span>
+                </div>
+                <h2 class="h4 fw-bold mb-3">Acerca de este evento</h2>
+                <div class="nexo-prose">@Model.Descripcion</div>
+            </article>
+
+            <!-- Lista de personas ya registradas al evento -->
+            <section class="nexo-panel" id="asistentes">
+                <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3 pb-3 border-bottom">
+                    <div>
+                        <div class="nexo-eyebrow mb-1">
+                            <span class="nexo-eyebrow-dot"></span>
+                            <span>QUIÉNES VAN A ASISTIR</span>
+                        </div>
+                        <h2 class="h4 fw-bold mb-0">
+                            Personas registradas al evento (@registros.Count)
+                        </h2>
+                        <p class="text-muted small mb-0 mt-1">
+                            Consulta quiénes ya confirmaron su interés para encontrar compañeros y gente conocida que asistirá.
+                        </p>
+                    </div>
+
+                    @if (registros.Any())
+                    {
+                        <div class="nexo-search-box" style="min-width: 240px;">
+                            <span class="nexo-search-icon" aria-hidden="true">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                </svg>
+                            </span>
+                            <input type="search"
+                                   class="nexo-search-input"
+                                   placeholder="Buscar amigos o carrera..."
+                                   aria-label="Buscar personas registradas al evento"
+                                   data-nexo-search />
+                        </div>
+                    }
+                </div>
+
+                @if (!registros.Any())
+                {
+                    <div class="nexo-empty py-4">
+                        <p class="fw-semibold mb-1">Aún no hay personas registradas en este evento.</p>
+                        <p class="text-muted small mb-0">¡Regístrate ahora para inaugurar la lista de asistentes!</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="nexo-attendee-list">
+                        @foreach (var reg in registros)
+                        {
+                            var asistente = reg.Usuario;
+                            var nombreAsistente = asistente is not null
+                                ? string.Join(" ", new[] { asistente.Nombres, asistente.ApellidoPaterno, asistente.ApellidoMaterno }.Where(s => !string.IsNullOrWhiteSpace(s)))
+                                : "Estudiante UNISON";
+                            var carreraAsistente = asistente?.Carrera?.Nombre ?? "Comunidad Universitaria";
+                            var iniciales = ObtenerIniciales(nombreAsistente);
+                            var palabrasBusqueda = $"{nombreAsistente} {carreraAsistente}";
+
+                            <div class="nexo-attendee-card"
+                                 data-nexo-item
+                                 data-nexo-type="todo"
+                                 data-nexo-keywords="@palabrasBusqueda">
+                                <span class="nexo-avatar-lg">@iniciales</span>
+                                <div class="min-w-0">
+                                    <div class="fw-bold text-truncate">@nombreAsistente</div>
+                                    <div class="text-muted small text-truncate">@carreraAsistente</div>
+                                    <div class="text-muted" style="font-size: 0.74rem;">
+                                        Registrado el @reg.FechaRegistro.ToLocalTime().ToString("dd MMM yyyy · HH:mm")
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="nexo-empty mt-3 py-3" data-nexo-empty-filter style="display: none;">
+                        <p class="text-muted small mb-0">No se encontraron personas registradas con ese nombre o carrera.</p>
+                    </div>
+                }
+            </section>
+        </div>
+
+        <!-- Columna lateral: Resumen y botón de inscripción -->
+        <aside class="nexo-panel">
+            <div class="nexo-eyebrow mb-2">
+                <span class="nexo-eyebrow-dot"></span>
+                <span>REGISTRO DE PARTICIPACIÓN</span>
+            </div>
+            <h3 class="h5 fw-bold mb-3">Información del encuentro</h3>
+
+            <dl class="mb-4">
+                <dt class="text-muted small text-uppercase">Fecha y hora</dt>
+                <dd class="fw-semibold mb-3">@Model.FechaHora.ToString("dddd, dd 'de' MMMM 'de' yyyy · HH:mm")</dd>
+
+                <dt class="text-muted small text-uppercase">Ubicación</dt>
+                <dd class="fw-semibold mb-3">@Model.Lugar</dd>
+
+                <dt class="text-muted small text-uppercase">Organizador responsable</dt>
+                <dd class="fw-semibold mb-3 d-flex align-items-center gap-2 mt-1">
+                    <span class="nexo-avatar">@ObtenerIniciales(nombreOrganizador)</span>
+                    <span>@nombreOrganizador</span>
+                </dd>
+
+                <dt class="text-muted small text-uppercase">Asistentes confirmados</dt>
+                <dd class="fw-semibold mb-0">
+                    @registros.Count @(registros.Count == 1 ? "persona registrada" : "personas registradas")
+                </dd>
+            </dl>
+
+            @if (Model.Activo && Model.EstadoAprobacion == EstadoAprobacion.Aprobado)
+            {
+                <div class="pt-3 border-top">
+                    @if (User.Identity?.IsAuthenticated == true)
+                    {
+                        if (estaRegistrado)
+                        {
+                            <div class="btn-nexo-registered w-100 justify-content-center py-2 mb-2">
+                                <span>✓ Ya estás registrado en este evento</span>
+                            </div>
+                            <form asp-controller="Eventos"
+                                  asp-action="CancelarRegistro"
+                                  asp-route-id="@Model.IdEvento"
+                                  method="post">
+                                <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                                <button type="submit" class="btn-nexo-outline w-100 justify-content-center">
+                                    Cancelar mi asistencia
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <form asp-controller="Eventos"
+                                  asp-action="RegistrarInteres"
+                                  asp-route-id="@Model.IdEvento"
+                                  method="post">
+                                <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                                <button type="submit" class="btn-nexo-primary w-100 justify-content-center py-2">
+                                    <span>Registrarme al evento</span>
+                                    <span aria-hidden="true">→</span>
+                                </button>
+                            </form>
+                        }
+                    }
+                    else
+                    {
+                        <a asp-controller="Cuenta"
+                           asp-action="IniciarSesion"
+                           asp-route-returnUrl="@Context.Request.Path"
+                           class="btn-nexo-primary w-100 justify-content-center py-2">
+                            <span>Inicia sesión para registrarte</span>
+                            <span aria-hidden="true">→</span>
+                        </a>
+                    }
+                </div>
+            }
+        </aside>
+    </div>
+
+    @if (puedeEditar && Model.Activo)
+    {
+        <section class="nexo-panel mt-4">
+            <h2 class="h5 fw-bold mb-2">Eliminar evento</h2>
+            <p class="text-muted small">
+                El evento se ocultará de la plataforma, pero sus datos e inscripciones se conservarán. El creador recibirá este motivo.
+            </p>
+            <form asp-controller="Eventos"
+                  asp-action="Eliminar"
+                  asp-route-id="@Model.IdEvento"
+                  method="post"
+                  class="d-flex flex-column flex-sm-row align-items-sm-end gap-2">
+                <div class="flex-grow-1">
+                    <label for="motivoEliminacionEvento" class="form-label">Motivo de eliminación</label>
+                    <textarea id="motivoEliminacionEvento"
+                              name="motivo"
+                              class="form-control"
+                              maxlength="1000"
+                              rows="2"
+                              required></textarea>
+                </div>
+                <button type="submit" class="btn-nexo-ghost">Eliminar evento</button>
+            </form>
+        </section>
+    }
+</section>

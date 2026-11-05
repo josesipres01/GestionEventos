@@ -1,0 +1,259 @@
+@model IEnumerable<Evento>
+@{
+    ViewData["Title"] = "Supervisión de Publicaciones";
+    var eventos = Model?.ToList() ?? new List<Evento>();
+    var proyectos = ViewBag.Proyectos as List<Proyecto> ?? new List<Proyecto>();
+}
+
+<section class="nexo-section">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <a asp-action="Index" class="btn-nexo-outline">← Volver al panel administrativo</a>
+        <div class="d-flex gap-2">
+            <a asp-controller="Eventos" asp-action="Crear" class="btn-nexo-outline">+ Nuevo evento</a>
+            <a asp-controller="Proyectos" asp-action="Crear" class="btn-nexo-primary">+ Nuevo proyecto</a>
+        </div>
+    </div>
+
+    <div class="mb-4">
+        <div class="nexo-eyebrow">
+            <span class="nexo-eyebrow-dot"></span>
+            <span>SUPERVISIÓN DEL CAMPUS · EVENTOS Y PROYECTOS</span>
+        </div>
+        <h1 class="nexo-section-title">Gestión de publicaciones</h1>
+        <p class="text-muted mt-2 mb-0">
+            Supervisa todos los eventos y proyectos publicados en la plataforma, consulta sus inscritos o modera contenido.
+        </p>
+    </div>
+
+    @if (TempData["Mensaje"] is string mensaje)
+    {
+        <div class="nexo-toast" role="status">
+            <span class="nexo-toast-dot">✓</span>
+            <span>@mensaje</span>
+        </div>
+    }
+
+    <!-- Tabla de Eventos -->
+    <div class="nexo-panel mb-4">
+        <h2 class="h4 fw-bold mb-3">Eventos universitarios (@eventos.Count)</h2>
+        @if (!eventos.Any())
+        {
+            <p class="text-muted mb-0">No hay eventos registrados actualmente.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr class="text-muted small text-uppercase">
+                            <th>Evento</th>
+                            <th>Fecha y hora</th>
+                            <th>Lugar</th>
+                            <th>Organizador</th>
+                            <th>Inscritos</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var evento in eventos)
+                        {
+                            var org = evento.Organizador is not null
+                                ? $"{evento.Organizador.Nombres} {evento.Organizador.ApellidoPaterno}".Trim()
+                                : "UNISON";
+                            var totalInscritos = evento.Registros?.Count ?? 0;
+
+                            <tr>
+                                <td class="fw-bold">
+                                    <a asp-controller="Eventos" asp-action="Detalle" asp-route-id="@evento.IdEvento" class="nexo-card-link">
+                                        @evento.Nombre
+                                    </a>
+                                    @if (!evento.Activo)
+                                    {
+                                        <span class="badge text-bg-secondary ms-1">Eliminado</span>
+                                        @if (evento.ReactivacionSolicitada)
+                                        {
+                                            <span class="badge text-bg-warning ms-1">Solicita reactivación</span>
+                                        }
+                                    }
+                                </td>
+                                <td>@evento.FechaHora.ToString("dd MMM yyyy · HH:mm")</td>
+                                <td>@evento.Lugar</td>
+                                <td>@org</td>
+                                <td>
+                                    <a asp-controller="Eventos" asp-action="Inscritos" asp-route-id="@evento.IdEvento" class="nexo-link-underline small">
+                                        @totalInscritos @(totalInscritos == 1 ? "inscrito" : "inscritos")
+                                    </a>
+                                </td>
+                                <td class="text-end">
+                                    <div class="d-inline-flex gap-2 align-items-center">
+                                        <a asp-controller="Eventos" asp-action="Inscritos" asp-route-id="@evento.IdEvento" class="btn-nexo-outline py-1 px-3 small">
+                                            Asistentes
+                                        </a>
+                                        @if (evento.Activo)
+                                        {
+                                            <a asp-controller="Eventos" asp-action="Editar" asp-route-id="@evento.IdEvento" class="btn-nexo-outline py-1 px-3 small">
+                                                Editar
+                                            </a>
+                                            <button type="button"
+                                                    class="btn-nexo-ghost small"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#modalEliminarPublicacion"
+                                                    data-delete-url="@Url.Action("EliminarEvento", "Admin", new { id = evento.IdEvento })"
+                                                    data-publication-name="@evento.Nombre"
+                                                    data-publication-type="evento">
+                                                Eliminar
+                                            </button>
+                                        }
+                                        else if (evento.ReactivacionSolicitada)
+                                        {
+                                            <form asp-action="ResolverReactivacion" method="post" class="d-inline m-0">
+                                                <input type="hidden" name="tipo" value="evento" />
+                                                <input type="hidden" name="id" value="@evento.IdEvento" />
+                                                <button type="submit" name="aprobar" value="true" class="btn-nexo-primary py-1 px-2 small">Reactivar</button>
+                                                <button type="submit" name="aprobar" value="false" class="btn-nexo-ghost small">Rechazar solicitud</button>
+                                            </form>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <!-- Tabla de Proyectos -->
+    <div class="nexo-panel">
+        <h2 class="h4 fw-bold mb-3">Proyectos académicos (@proyectos.Count)</h2>
+        @if (!proyectos.Any())
+        {
+            <p class="text-muted mb-0">No hay proyectos registrados actualmente.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr class="text-muted small text-uppercase">
+                            <th>Proyecto</th>
+                            <th>Carrera</th>
+                            <th>Responsable (Org/Admin)</th>
+                            <th>Autor</th>
+                            <th>Colaboradores</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var proyecto in proyectos)
+                        {
+                            var autor = proyecto.Usuario is not null
+                                ? $"{proyecto.Usuario.Nombres} {proyecto.Usuario.ApellidoPaterno}".Trim()
+                                : "Estudiante";
+                            var totalColab = proyecto.Registros?.Count ?? 0;
+
+                            <tr>
+                                <td class="fw-bold">
+                                    <a asp-controller="Proyectos" asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="nexo-card-link">
+                                        @proyecto.Nombre
+                                    </a>
+                                    @if (!proyecto.Activo)
+                                    {
+                                        <span class="badge text-bg-secondary ms-1">Eliminado</span>
+                                        @if (proyecto.ReactivacionSolicitada)
+                                        {
+                                            <span class="badge text-bg-warning ms-1">Solicita reactivación</span>
+                                        }
+                                    }
+                                </td>
+                                <td>@(proyecto.Carrera?.Nombre ?? "General")</td>
+                                <td>@proyecto.NombreResponsable</td>
+                                <td>@autor</td>
+                                <td>@totalColab</td>
+                                <td class="text-end">
+                                    <div class="d-inline-flex gap-2 align-items-center">
+                                        <a asp-controller="Proyectos" asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="btn-nexo-outline py-1 px-3 small">
+                                            Ver detalle
+                                        </a>
+                                        @if (proyecto.Activo)
+                                        {
+                                            <a asp-controller="Proyectos" asp-action="Editar" asp-route-id="@proyecto.IdProyecto" class="btn-nexo-outline py-1 px-3 small">
+                                                Editar
+                                            </a>
+                                            <button type="button"
+                                                    class="btn-nexo-ghost small"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#modalEliminarPublicacion"
+                                                    data-delete-url="@Url.Action("EliminarProyecto", "Admin", new { id = proyecto.IdProyecto })"
+                                                    data-publication-name="@proyecto.Nombre"
+                                                    data-publication-type="proyecto">
+                                                Eliminar
+                                            </button>
+                                        }
+                                        else if (proyecto.ReactivacionSolicitada)
+                                        {
+                                            <form asp-action="ResolverReactivacion" method="post" class="d-inline m-0">
+                                                <input type="hidden" name="tipo" value="proyecto" />
+                                                <input type="hidden" name="id" value="@proyecto.IdProyecto" />
+                                                <button type="submit" name="aprobar" value="true" class="btn-nexo-primary py-1 px-2 small">Reactivar</button>
+                                                <button type="submit" name="aprobar" value="false" class="btn-nexo-ghost small">Rechazar solicitud</button>
+                                            </form>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+<div class="modal fade" id="modalEliminarPublicacion" tabindex="-1" aria-labelledby="modalEliminarPublicacionLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form id="formEliminarPublicacion" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h2 class="modal-title fs-5" id="modalEliminarPublicacionLabel">Eliminar publicación</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="textoEliminarPublicacion" class="text-muted"></p>
+                    <label for="motivoEliminarPublicacion" class="form-label">Motivo de eliminación</label>
+                    <textarea id="motivoEliminarPublicacion"
+                              name="motivo"
+                              class="form-control"
+                              maxlength="1000"
+                              rows="4"
+                              required></textarea>
+                    <div class="form-text">El creador recibirá este motivo en una notificación.</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-nexo-outline" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-nexo-ghost">Eliminar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const modalEliminarPublicacion = document.getElementById("modalEliminarPublicacion");
+        modalEliminarPublicacion.addEventListener("show.bs.modal", event => {
+            const button = event.relatedTarget;
+            const form = document.getElementById("formEliminarPublicacion");
+            const texto = document.getElementById("textoEliminarPublicacion");
+            const motivo = document.getElementById("motivoEliminarPublicacion");
+            const tipo = button.dataset.publicationType;
+            const nombre = button.dataset.publicationName;
+
+            form.action = button.dataset.deleteUrl;
+            texto.textContent = `¿Confirmas que deseas eliminar el ${tipo} «${nombre}»? Esta acción lo ocultará de la plataforma y conservará sus registros.`;
+            motivo.value = "";
+            motivo.focus();
+        });
+    </script>
+}

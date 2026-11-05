@@ -1,0 +1,120 @@
+@model EditarProyectoViewModel
+@{
+    ViewData["Title"] = "Editar proyecto";
+}
+
+<section class="nexo-form-shell">
+    <div class="mb-4">
+        <div class="nexo-eyebrow">
+            <span class="nexo-eyebrow-dot"></span>
+            <span>ACTUALIZACIÓN DE INICIATIVA · PROYECTO ACADÉMICO</span>
+        </div>
+        <h1 class="nexo-section-title">Editar proyecto académico</h1>
+        <p class="text-muted mt-2 mb-0">
+            Corrige cualquier dato, cambia la carrera o reemplaza la imagen de miniatura del proyecto. Los colaboradores registrados recibirán un aviso del cambio.
+        </p>
+    </div>
+
+    <div class="nexo-panel">
+        <form asp-action="Editar" method="post" enctype="multipart/form-data">
+            <input type="hidden" asp-for="IdProyecto" />
+            <input type="hidden" asp-for="ImagenUrlActual" />
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger rounded-3"></div>
+
+            <div class="mb-3">
+                <label asp-for="Nombre" class="nexo-label"></label>
+                <input asp-for="Nombre" class="nexo-input" />
+                <span asp-validation-for="Nombre" class="text-danger small"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Descripcion" class="nexo-label"></label>
+                <textarea asp-for="Descripcion" class="nexo-textarea" rows="5"></textarea>
+                <span asp-validation-for="Descripcion" class="text-danger small"></span>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label asp-for="IdUsuarioResponsable" class="nexo-label"></label>
+                    <select asp-for="IdUsuarioResponsable" asp-items="ViewBag.Responsables" class="nexo-select">
+                        <option value="">Selecciona un organizador responsable</option>
+                    </select>
+                    <span asp-validation-for="IdUsuarioResponsable" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label asp-for="IdCarrera" class="nexo-label"></label>
+                    <select asp-for="IdCarrera" asp-items="ViewBag.Carreras" class="nexo-select">
+                        <option value="">Selecciona una carrera o departamento</option>
+                    </select>
+                    <span asp-validation-for="IdCarrera" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label asp-for="LugarReunion" class="nexo-label"></label>
+                    <input asp-for="LugarReunion" class="nexo-input" placeholder="Ej. Laboratorio de Cómputo 3" />
+                    <span asp-validation-for="LugarReunion" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="FechaInicio" class="nexo-label"></label>
+                    <input asp-for="FechaInicio" type="date" class="nexo-input" value="@Model.FechaInicio.ToString("yyyy-MM-dd")" />
+                    <span asp-validation-for="FechaInicio" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="FechaFin" class="nexo-label"></label>
+                    <input asp-for="FechaFin" type="date" class="nexo-input" value="@Model.FechaFin.ToString("yyyy-MM-dd")" />
+                    <span asp-validation-for="FechaFin" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label asp-for="ImagenArchivo" class="nexo-label"></label>
+                <input asp-for="ImagenArchivo"
+                       type="file"
+                       accept=".jpg,.jpeg,.png,.webp,.gif"
+                       class="nexo-input"
+                       id="inputImagenProyectoEditar" />
+                <span asp-validation-for="ImagenArchivo" class="text-danger small"></span>
+                <div class="form-text text-muted small mt-1">
+                    Selecciona una nueva imagen (JPG, PNG, WEBP o GIF, máx. 5 MB) solo si deseas reemplazar la miniatura actual.
+                </div>
+
+                <div id="contenedorMiniaturaProyectoActual" class="mt-3" style="@(string.IsNullOrWhiteSpace(Model.ImagenUrlActual) ? "display: none;" : "")">
+                    <span class="text-muted small d-block mb-1 fw-semibold">Miniatura del proyecto:</span>
+                    <div class="nexo-card-media rounded-3 border" style="max-width: 360px; height: 200px;">
+                        <span class="nexo-badge-type badge-proyecto">PROYECTO</span>
+                        <img id="imgPrevisualizacionProyectoEditar" src="@(Model.ImagenUrlActual ?? "")" alt="Miniatura del proyecto" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 pt-2">
+                <button type="submit" class="btn-nexo-primary">
+                    <span>Guardar cambios</span>
+                    <span aria-hidden="true">→</span>
+                </button>
+                <a asp-action="Detalle" asp-route-id="@Model.IdProyecto" class="btn-nexo-outline">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.getElementById("inputImagenProyectoEditar")?.addEventListener("change", function (e) {
+            const archivo = e.target.files?.[0];
+            const contenedor = document.getElementById("contenedorMiniaturaProyectoActual");
+            const imagen = document.getElementById("imgPrevisualizacionProyectoEditar");
+            if (archivo && contenedor && imagen) {
+                imagen.src = URL.createObjectURL(archivo);
+                contenedor.style.display = "block";
+            }
+        });
+    </script>
+}
+

@@ -1,0 +1,95 @@
+@model RegistrarOrganizadorViewModel
+@{
+    ViewData["Title"] = "Registrar Organizador o Usuario";
+}
+
+<section class="nexo-form-shell">
+    <div class="mb-4">
+        <div class="nexo-eyebrow">
+            <span class="nexo-eyebrow-dot"></span>
+            <span>ADMINISTRACIÓN · ALTA DE CUENTAS</span>
+        </div>
+        <h1 class="nexo-section-title">Registrar Organizador o Usuario</h1>
+        <p class="text-muted mt-2 mb-0">
+            Crea cuentas para docentes organizadores (que podrán publicar eventos y ser responsables de proyectos académicos) o administradores.
+        </p>
+    </div>
+
+    <div class="nexo-panel">
+        <form asp-action="RegistrarUsuario" method="post">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger rounded-3"></div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label asp-for="Nombres" class="nexo-label"></label>
+                    <input asp-for="Nombres" class="nexo-input" placeholder="Ej. Dr. Carlos" />
+                    <span asp-validation-for="Nombres" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="ApellidoPaterno" class="nexo-label"></label>
+                    <input asp-for="ApellidoPaterno" class="nexo-input" placeholder="Ej. Ramírez" />
+                    <span asp-validation-for="ApellidoPaterno" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="ApellidoMaterno" class="nexo-label"></label>
+                    <input asp-for="ApellidoMaterno" class="nexo-input" placeholder="Ej. Soto (opcional)" />
+                    <span asp-validation-for="ApellidoMaterno" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label asp-for="Correo" class="nexo-label"></label>
+                    <input asp-for="Correo" class="nexo-input" placeholder="docente@unison.mx" autocomplete="email" />
+                    <span asp-validation-for="Correo" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label asp-for="IdRol" class="nexo-label"></label>
+                    <select asp-for="IdRol" asp-items="ViewBag.Roles" class="nexo-select"></select>
+                    <span asp-validation-for="IdRol" class="text-danger small"></span>
+                    <div class="form-text text-muted small mt-1">
+                        El rol <strong>Organizador/Docente</strong> permite crear eventos y ser seleccionado como responsable de proyectos.
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="IdCarrera" class="nexo-label"></label>
+                <select asp-for="IdCarrera" asp-items="ViewBag.Carreras" class="nexo-select">
+                    <option value="">Selecciona una carrera o departamento (opcional)</option>
+                </select>
+                <span asp-validation-for="IdCarrera" class="text-danger small"></span>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label asp-for="Contrasena" class="nexo-label"></label>
+                    <input asp-for="Contrasena" class="nexo-input" placeholder="Mínimo 6 caracteres" autocomplete="new-password" />
+                    <span asp-validation-for="Contrasena" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label asp-for="ConfirmarContrasena" class="nexo-label"></label>
+                    <input asp-for="ConfirmarContrasena" class="nexo-input" placeholder="Repite la contraseña" autocomplete="new-password" />
+                    <span asp-validation-for="ConfirmarContrasena" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 pt-2">
+                <button type="submit" class="btn-nexo-primary">
+                    <span>Registrar cuenta</span>
+                    <span aria-hidden="true">→</span>
+                </button>
+                <a asp-action="Index" class="btn-nexo-outline">Volver al panel</a>
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
+

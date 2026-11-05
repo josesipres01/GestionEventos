@@ -1,0 +1,135 @@
+@model Evento
+@{
+    ViewData["Title"] = $"Inscritos — {Model.Nombre}";
+    var registros = Model.Registros
+        .OrderByDescending(r => r.FechaRegistro)
+        .ToList();
+
+    var organizadorNombre = Model.Organizador is not null
+        ? $"{Model.Organizador.Nombres} {Model.Organizador.ApellidoPaterno}".Trim()
+        : "UNISON";
+
+    static string ObtenerIniciales(string? texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto))
+        {
+            return "ES";
+        }
+
+        var partes = texto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return string.Concat(partes.Take(2).Select(p => char.ToUpperInvariant(p[0])));
+    }
+}
+
+<section class="nexo-section">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <a asp-action="MisEventos" class="btn-nexo-outline">← Volver a mis eventos</a>
+        <div class="d-flex gap-2">
+            <a asp-action="Editar" asp-route-id="@Model.IdEvento" class="btn-nexo-outline">Editar evento</a>
+            <a asp-action="Detalle" asp-route-id="@Model.IdEvento" class="btn-nexo-primary">Ver página del evento →</a>
+        </div>
+    </div>
+
+    <div class="nexo-panel mb-4">
+        <div class="nexo-eyebrow mb-2">
+            <span class="nexo-eyebrow-dot"></span>
+            <span>LISTA DE ASISTENCIA · ORGANIZADOR</span>
+        </div>
+
+        <div class="nexo-catalog-header">
+            <div>
+                <h1 class="nexo-section-title">@Model.Nombre</h1>
+                <p class="text-muted mt-2 mb-0">
+                    <strong>Fecha:</strong> @Model.FechaHora.ToString("dd MMM yyyy · HH:mm") &nbsp;|&nbsp;
+                    <strong>Lugar:</strong> @Model.Lugar &nbsp;|&nbsp;
+                    <strong>Organiza:</strong> @organizadorNombre
+                </p>
+            </div>
+
+            <div class="nexo-search-box">
+                <span class="nexo-search-icon" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                </span>
+                <input type="search"
+                       class="nexo-search-input"
+                       placeholder="Buscar inscrito por nombre, correo o carrera..."
+                       aria-label="Buscar asistente"
+                       data-nexo-search />
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center my-3">
+            <span class="fw-bold">Estudiantes e interesados registrados</span>
+            <span class="nexo-count-label"
+                  data-nexo-counter
+                  data-singular="persona inscrita"
+                  data-plural="personas inscritas">
+                @registros.Count @(registros.Count == 1 ? "persona inscrita" : "personas inscritas")
+            </span>
+        </div>
+
+        @if (!registros.Any())
+        {
+            <div class="nexo-empty py-4">
+                <h2 class="h5 fw-bold mb-1">Aún no hay personas registradas en este evento</h2>
+                <p class="text-muted small mb-0">Conforme los estudiantes se inscriban, sus datos de contacto y carrera aparecerán aquí.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr class="text-muted small text-uppercase">
+                            <th>#</th>
+                            <th>Asistente</th>
+                            <th>Correo institucional</th>
+                            <th>Carrera</th>
+                            <th>Fecha de inscripción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{
+                            var num = 1;
+                        }
+                        @foreach (var reg in registros)
+                        {
+                            var usuario = reg.Usuario;
+                            var nombreCompleto = usuario is not null
+                                ? string.Join(" ", new[] { usuario.Nombres, usuario.ApellidoPaterno, usuario.ApellidoMaterno }.Where(s => !string.IsNullOrWhiteSpace(s)))
+                                : "Estudiante";
+                            var correo = usuario?.Correo ?? "-";
+                            var carrera = usuario?.Carrera?.Nombre ?? "General";
+                            var iniciales = ObtenerIniciales(nombreCompleto);
+                            var palabras = $"{nombreCompleto} {correo} {carrera}";
+
+                            <tr data-nexo-item
+                                data-nexo-type="todo"
+                                data-nexo-keywords="@palabras">
+                                <td class="text-muted fw-bold">@num.ToString("D2")</td>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="nexo-avatar">@iniciales</span>
+                                        <span class="fw-semibold">@nombreCompleto</span>
+                                    </div>
+                                </td>
+                                <td class="text-muted">@correo</td>
+                                <td>@carrera</td>
+                                <td class="text-muted small">@reg.FechaRegistro.ToLocalTime().ToString("dd MMM yyyy · HH:mm")</td>
+                            </tr>
+                            num++;
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="nexo-empty mt-3 py-3" data-nexo-empty-filter style="display: none;">
+                <p class="text-muted small mb-0">Ningún asistente coincide con tu búsqueda.</p>
+            </div>
+        }
+    </div>
+</section>
+

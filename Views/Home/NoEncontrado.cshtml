@@ -1,0 +1,21 @@
+@{
+    ViewData["Title"] = "Página no encontrada";
+}
+
+<section class="nexo-not-found" aria-labelledby="not-found-title">
+    <div class="nexo-not-found-card">
+        <span class="nexo-not-found-code" aria-hidden="true">404</span>
+        <p class="nexo-eyebrow">
+            <span class="nexo-eyebrow-dot"></span>
+            Página no encontrada
+        </p>
+        <h1 id="not-found-title">No encontramos lo que buscas</h1>
+        <p class="nexo-not-found-message">
+            El proyecto o evento puede haber sido eliminado o ya no estar disponible.
+            Revisa la dirección o vuelve al inicio para seguir explorando.
+        </p>
+        <a asp-controller="Eventos" asp-action="Index" class="btn-nexo-primary">
+            ← Volver al inicio
+        </a>
+    </div>
+</section>

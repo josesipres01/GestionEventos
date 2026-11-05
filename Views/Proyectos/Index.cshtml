@@ -1,0 +1,232 @@
+@model IEnumerable<Proyecto>
+@{
+    ViewData["Title"] = "Proyectos académicos";
+    var proyectos = Model?.ToList() ?? new List<Proyecto>();
+    var proyectosRegistradosIds = ViewBag.ProyectosRegistradosIds as HashSet<int> ?? new HashSet<int>();
+    var usuarioActualId = ViewBag.UsuarioActualId as int? ?? 0;
+    var esAdmin = User.IsInRole("Administrador") || User.IsInRole("Admin");
+    var carrerasPresentes = proyectos
+        .Where(p => p.Carrera is not null)
+        .Select(p => p.Carrera.Nombre)
+        .Distinct()
+        .OrderBy(nombre => nombre)
+        .ToList();
+
+    string[] imagenesProyectos =
+    [
+        "/img/proyecto-1.svg",
+        "/img/proyecto-2.svg",
+        "/img/proyecto-3.svg"
+    ];
+
+    static string ObtenerIniciales(string? texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto))
+        {
+            return "PR";
+        }
+
+        var partes = texto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return string.Concat(partes.Take(2).Select(p => char.ToUpperInvariant(p[0])));
+    }
+}
+
+<section class="nexo-section">
+    <div class="mb-4">
+        <div class="nexo-eyebrow">
+            <span class="nexo-eyebrow-dot"></span>
+            <span>COMUNIDAD ESTUDIANTIL · PROYECTOS ACADÉMICOS</span>
+        </div>
+
+        <div class="nexo-catalog-header">
+            <div>
+                <h1 class="nexo-section-title">Proyectos desarrollados en el campus</h1>
+                <p class="text-muted mt-2 mb-0">
+                    Haz clic en cualquier proyecto para conocer su descripción completa y registrarte como colaborador.
+                </p>
+            </div>
+
+            <div class="nexo-search-box">
+                <span class="nexo-search-icon" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                </span>
+                <input type="search"
+                       class="nexo-search-input"
+                       placeholder="Buscar por proyecto, responsable o carrera..."
+                       aria-label="Buscar proyectos"
+                       data-nexo-search />
+            </div>
+        </div>
+    </div>
+
+    @if (TempData["Mensaje"] is string mensaje)
+    {
+        <div class="nexo-toast" role="status">
+            <span class="nexo-toast-dot">✓</span>
+            <span>@mensaje</span>
+        </div>
+    }
+
+    <div class="nexo-filter-bar">
+        <div class="nexo-filter-pills" role="tablist" aria-label="Filtrar por carrera">
+            <button type="button" class="nexo-pill active" data-nexo-filter="todo">Todas las carreras</button>
+            @foreach (var carrera in carrerasPresentes)
+            {
+                <button type="button" class="nexo-pill" data-nexo-filter="@carrera.ToLowerInvariant()">@carrera</button>
+            }
+        </div>
+
+        <div class="d-flex align-items-center gap-3">
+            <span class="nexo-count-label"
+                  data-nexo-counter
+                  data-singular="proyecto"
+                  data-plural="proyectos">
+                @proyectos.Count @(proyectos.Count == 1 ? "proyecto" : "proyectos")
+            </span>
+
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <a asp-action="Crear" class="btn-nexo-primary">
+                    <span>+ Publicar proyecto</span>
+                </a>
+            }
+            else
+            {
+                <a asp-controller="Cuenta" asp-action="IniciarSesion" class="btn-nexo-outline">
+                    Inicia sesión para publicar
+                </a>
+            }
+        </div>
+    </div>
+
+    @if (!proyectos.Any())
+    {
+        <div class="nexo-empty">
+            <h2 class="h5 fw-bold mb-2">Aún no hay proyectos publicados</h2>
+            <p class="text-muted mb-4">Comparte tu proyecto académico y conecta con estudiantes e investigadores de tu carrera.</p>
+            <a asp-action="Crear" class="btn-nexo-primary">+ Publicar primer proyecto</a>
+        </div>
+    }
+    else
+    {
+        var indice = 1;
+        <div class="nexo-grid">
+            @foreach (var proyecto in proyectos)
+            {
+                var numeroTexto = indice.ToString("D2");
+                var imagenUrl = !string.IsNullOrWhiteSpace(proyecto.ImagenUrl)
+                    ? proyecto.ImagenUrl
+                    : imagenesProyectos[(indice - 1) % imagenesProyectos.Length];
+                var nombreCarrera = proyecto.Carrera?.Nombre ?? "General";
+                var autor = proyecto.Usuario is not null
+                    ? $"{proyecto.Usuario.Nombres} {proyecto.Usuario.ApellidoPaterno}".Trim()
+                    : proyecto.NombreResponsable;
+                var iniciales = ObtenerIniciales(proyecto.NombreResponsable);
+                var estaRegistrado = proyectosRegistradosIds.Contains(proyecto.IdProyecto);
+                var puedeEditar = esAdmin || (usuarioActualId > 0 && proyecto.IdUsuario == usuarioActualId);
+                var totalColaboradores = proyecto.Registros?.Count ?? 0;
+                var palabrasClave = $"{proyecto.Nombre} {proyecto.Descripcion} {proyecto.NombreResponsable} {nombreCarrera} {autor}";
+                indice++;
+
+                <article class="nexo-card"
+                         data-nexo-item
+                         data-nexo-type="@nombreCarrera.ToLowerInvariant()"
+                         data-nexo-keywords="@palabrasClave">
+                    <a asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="nexo-card-media d-block text-decoration-none">
+                        <span class="nexo-badge-type badge-proyecto">PROYECTO</span>
+                        <img src="@imagenUrl" alt="@proyecto.Nombre" loading="lazy" />
+                        <span class="nexo-card-index">@numeroTexto</span>
+                    </a>
+
+                    <div class="nexo-card-body">
+                        <div class="nexo-card-category">@nombreCarrera</div>
+                        <h2 class="nexo-card-title">
+                            <a asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="nexo-card-link">
+                                @proyecto.Nombre
+                            </a>
+                        </h2>
+                        <p class="nexo-card-desc">@proyecto.Descripcion</p>
+
+                        <div class="nexo-card-meta">
+                            <span class="nexo-meta-item" title="Lugar de reunión">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                    <circle cx="12" cy="10" r="3"></circle>
+                                </svg>
+                                <span>@proyecto.LugarReunion</span>
+                            </span>
+
+                            <span class="nexo-meta-item" title="Periodo de inicio a fin">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                                <span>@proyecto.FechaInicio.ToString("dd MMM") – @proyecto.FechaFin.ToString("dd MMM yyyy")</span>
+                            </span>
+
+                            <a asp-action="Detalle"
+                               asp-route-id="@proyecto.IdProyecto"
+                               asp-fragment="colaboradores"
+                               class="nexo-meta-item text-decoration-none"
+                               style="color: var(--nexo-teal);">
+                                <span>+ @totalColaboradores @(totalColaboradores == 1 ? "colaborador" : "colaboradores")</span>
+                            </a>
+                        </div>
+
+                        <div class="nexo-card-footer">
+                            <div class="nexo-author" title="Publicado por: @autor">
+                                <span class="nexo-avatar">@iniciales</span>
+                                <span class="nexo-author-name">@proyecto.NombreResponsable</span>
+                            </div>
+
+                            <div class="d-flex align-items-center gap-2">
+                                @if (puedeEditar)
+                                {
+                                    <a asp-action="Editar"
+                                       asp-route-id="@proyecto.IdProyecto"
+                                       class="btn-nexo-outline py-1 px-2 small"
+                                       title="Editar proyecto">
+                                        Editar
+                                    </a>
+                                }
+                                @if (User.Identity?.IsAuthenticated == true)
+                                {
+                                    if (estaRegistrado)
+                                    {
+                                        <span class="btn-nexo-registered">✓ Inscrito</span>
+                                    }
+                                    else
+                                    {
+                                        <form asp-action="RegistrarInteres" asp-route-id="@proyecto.IdProyecto" method="post" class="m-0">
+                                            <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                                            <button type="submit" class="btn-nexo-interest">
+                                                <span>Sumarme</span>
+                                            </button>
+                                        </form>
+                                    }
+                                }
+
+                                <a asp-action="Detalle"
+                                   asp-route-id="@proyecto.IdProyecto"
+                                   class="nexo-circle-btn"
+                                   title="Ver proyecto en grande">
+                                    <span aria-hidden="true">→</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+
+        <div class="nexo-empty mt-4" data-nexo-empty-filter style="display: none;">
+            <h3 class="h5 fw-bold mb-2">No encontramos proyectos con ese criterio</h3>
+            <p class="text-muted mb-0">Prueba con otra carrera o término de búsqueda.</p>
+        </div>
+    }
+</section>

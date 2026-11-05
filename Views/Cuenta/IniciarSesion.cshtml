@@ -1,0 +1,52 @@
+@model IniciarSesionViewModel
+@{
+    ViewData["Title"] = "Iniciar sesión";
+}
+
+<section class="nexo-auth-shell">
+    <div class="text-center mb-4">
+        <div class="nexo-eyebrow justify-content-center">
+            <span class="nexo-eyebrow-dot"></span>
+            <span>ACCESO UNIVERSITARIO</span>
+        </div>
+        <h1 class="nexo-section-title">Bienvenido de nuevo</h1>
+        <p class="text-muted mt-2 mb-0">
+            Ingresa con tu correo institucional para registrarte en eventos y enviar eventos o proyectos para aprobación.
+        </p>
+    </div>
+
+    <div class="nexo-panel">
+        <form asp-action="IniciarSesion" method="post">
+            <input type="hidden" name="returnUrl" value="@ViewData["ReturnUrl"]" />
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger rounded-3"></div>
+
+            <div class="mb-3">
+                <label asp-for="Correo" class="nexo-label"></label>
+                <input asp-for="Correo" class="nexo-input" placeholder="correo@unison.mx" autocomplete="username" />
+                <span asp-validation-for="Correo" class="text-danger small"></span>
+            </div>
+
+            <div class="mb-4">
+                <label asp-for="Contrasena" class="nexo-label"></label>
+                <input asp-for="Contrasena" class="nexo-input" placeholder="••••••••" autocomplete="current-password" />
+                <span asp-validation-for="Contrasena" class="text-danger small"></span>
+            </div>
+
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn-nexo-primary justify-content-center py-2">
+                    <span>Iniciar sesión</span>
+                    <span aria-hidden="true">→</span>
+                </button>
+            </div>
+
+            <div class="text-center mt-4 pt-3 border-top">
+                <span class="text-muted small">¿Aún no tienes una cuenta?</span>
+                <a asp-action="Registrar" class="nexo-link-underline ms-1 small">Crear cuenta de estudiante</a>
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

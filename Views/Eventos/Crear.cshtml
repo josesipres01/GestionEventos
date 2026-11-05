@@ -1,0 +1,106 @@
+@model CrearEventoViewModel
+@{
+    ViewData["Title"] = "Publicar evento";
+}
+
+<section class="nexo-form-shell">
+    <div class="mb-4">
+        <div class="nexo-eyebrow">
+            <span class="nexo-eyebrow-dot"></span>
+            <span>AGENDA DEL CAMPUS · SOLICITUD DE PUBLICACIÓN</span>
+        </div>
+        <h1 class="nexo-section-title">Publicar evento universitario</h1>
+        <p class="text-muted mt-2 mb-0">
+            Envía tu evento al organizador responsable. Se mostrará en la agenda del campus cuando sea aprobado.
+        </p>
+    </div>
+
+    <div class="nexo-panel">
+        <form asp-action="Crear" method="post" enctype="multipart/form-data">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger rounded-3"></div>
+
+            <div class="mb-3">
+                <label asp-for="Nombre" class="nexo-label"></label>
+                <input asp-for="Nombre" class="nexo-input" placeholder="Ej. Feria de innovación y futuro" />
+                <span asp-validation-for="Nombre" class="text-danger small"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Descripcion" class="nexo-label"></label>
+                <textarea asp-for="Descripcion" class="nexo-textarea" rows="4" placeholder="Describe de qué trata el evento, a quién va dirigido y qué aprenderán los asistentes..."></textarea>
+                <span asp-validation-for="Descripcion" class="text-danger small"></span>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label asp-for="FechaHora" class="nexo-label"></label>
+                    <input asp-for="FechaHora" type="datetime-local" class="nexo-input" value="@Model.FechaHora.ToString("yyyy-MM-ddTHH:mm")" />
+                    <span asp-validation-for="FechaHora" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label asp-for="Lugar" class="nexo-label"></label>
+                    <input asp-for="Lugar" class="nexo-input" placeholder="Ej. Auditorio Norte / Patio Central" />
+                    <span asp-validation-for="Lugar" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label asp-for="IdUsuarioOrganizador" class="nexo-label"></label>
+                <select asp-for="IdUsuarioOrganizador" asp-items="ViewBag.Organizadores" class="nexo-select">
+                    <option value="0">Selecciona al organizador responsable</option>
+                </select>
+                <span asp-validation-for="IdUsuarioOrganizador" class="text-danger small"></span>
+                <div class="form-text text-muted small mt-1">
+                    El organizador seleccionado debe revisar tu solicitud antes de que el evento aparezca en el campus.
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label asp-for="ImagenArchivo" class="nexo-label"></label>
+                <input asp-for="ImagenArchivo"
+                       type="file"
+                       accept=".jpg,.jpeg,.png,.webp,.gif"
+                       class="nexo-input"
+                       id="inputImagenEvento" />
+                <span asp-validation-for="ImagenArchivo" class="text-danger small"></span>
+                <div class="form-text text-muted small mt-1">
+                    Formatos permitidos: JPG, PNG, WEBP o GIF (máximo 5 MB). Si no subes una imagen, se asignará una portada institucional por defecto.
+                </div>
+
+                <div id="contenedorPrevisualizacion" class="mt-3" style="display: none;">
+                    <span class="text-muted small d-block mb-1 fw-semibold">Vista previa de la miniatura:</span>
+                    <div class="nexo-card-media rounded-3 border" style="max-width: 360px; height: 200px;">
+                        <span class="nexo-badge-type">EVENTO</span>
+                        <img id="imgPrevisualizacion" src="" alt="Vista previa de miniatura" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 pt-2">
+                <button type="submit" class="btn-nexo-primary">
+                    <span>Enviar solicitud</span>
+                    <span aria-hidden="true">→</span>
+                </button>
+                <a asp-action="Index" class="btn-nexo-outline">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.getElementById("inputImagenEvento")?.addEventListener("change", function (e) {
+            const archivo = e.target.files?.[0];
+            const contenedor = document.getElementById("contenedorPrevisualizacion");
+            const imagen = document.getElementById("imgPrevisualizacion");
+            if (archivo && contenedor && imagen) {
+                imagen.src = URL.createObjectURL(archivo);
+                contenedor.style.display = "block";
+            } else if (contenedor) {
+                contenedor.style.display = "none";
+            }
+        });
+    </script>
+}

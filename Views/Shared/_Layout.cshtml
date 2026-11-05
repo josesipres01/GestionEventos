@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Gestión de Eventos</title>
+    <script type="importmap"></script>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/GestionEventos.styles.css" asp-append-version="true" />
+</head>
+<body>
+    @{
+        var controladorActual = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+        var accionActual = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+        var esAdmin = User.IsInRole("Administrador") || User.IsInRole("Admin");
+        var esOrganizadorOAdmin = esAdmin
+            || User.IsInRole("Organizador/Docente")
+            || User.IsInRole("Organizador");
+
+        var nombreUsuario = User.Identity?.Name ?? "Usuario";
+        var inicialesUsuario = string.Concat(
+            nombreUsuario
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Take(2)
+                .Select(p => char.ToUpperInvariant(p[0])));
+        if (string.IsNullOrEmpty(inicialesUsuario))
+        {
+            inicialesUsuario = "U";
+        }
+    }
+    <header class="nexo-header">
+        <nav class="nexo-navbar" aria-label="Menú principal">
+            <ul class="nexo-nav-links">
+                <li>
+                    <a class="nexo-nav-link @(controladorActual == "Eventos" && accionActual == "Index" ? "active" : "")"
+                       asp-controller="Eventos" asp-action="Index">Explorar</a>
+                </li>
+                <li>
+                    <a class="nexo-nav-link @(controladorActual == "Eventos" && accionActual == "MisRegistros" ? "active" : "")"
+                       asp-controller="Eventos" asp-action="MisRegistros">Agenda</a>
+                </li>
+                <li>
+                    <a class="nexo-nav-link @(controladorActual == "Proyectos" ? "active" : "")"
+                       asp-controller="Proyectos" asp-action="Index">Proyectos</a>
+                </li>
+                @if (esOrganizadorOAdmin)
+                {
+                    <li>
+                        <a class="nexo-nav-link @(controladorActual == "Eventos" && (accionActual == "MisEventos" || accionActual == "Inscritos" || accionActual == "Editar") ? "active" : "")"
+                           asp-controller="Eventos" asp-action="MisEventos">Mis eventos</a>
+                    </li>
+                }
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <li>
+                        <a class="nexo-nav-link @(controladorActual == "Solicitudes" ? "active" : "")"
+                           asp-controller="Solicitudes" asp-action="Index">Mis solicitudes</a>
+                    </li>
+                }
+                @if (esAdmin)
+                {
+                    <li>
+                        <a class="nexo-nav-link @(controladorActual == "Admin" ? "active" : "")"
+                           asp-controller="Admin" asp-action="Index">Administración</a>
+                    </li>
+                }
+            </ul>
+
+            <div class="nexo-nav-actions">
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <a class="btn-nexo-outline" asp-controller="Eventos" asp-action="Crear">
+                        <span>+ Evento</span>
+                    </a>
+                    <a class="btn-nexo-primary" asp-controller="Proyectos" asp-action="Crear">
+                        <span>+ Publicar</span>
+                    </a>
+                    <div class="nexo-user-chip" title="@nombreUsuario">
+                        <span class="nexo-user-chip-avatar">@inicialesUsuario</span>
+                        <span class="d-none d-md-inline">@nombreUsuario</span>
+                    </div>
+                    <form asp-controller="Cuenta" asp-action="CerrarSesion" method="post" class="d-inline">
+                        <button type="submit" class="btn-nexo-ghost">Salir</button>
+                    </form>
+                }
+                else
+                {
+                    <a class="btn-nexo-outline" asp-controller="Cuenta" asp-action="IniciarSesion">Iniciar sesión</a>
+                    <a class="btn-nexo-primary" asp-controller="Proyectos" asp-action="Crear">+ Publicar</a>
+                }
+            </div>
+        </nav>
+    </header>
+
+    <div class="nexo-container">
+        <main role="main">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="nexo-footer">
+        <div class="nexo-container d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+                Eventos universitarios y proyectos académicos.
+            </div>
+            <div class="d-flex gap-3">
+                <a class="text-decoration-none text-muted" asp-controller="Eventos" asp-action="Index">Eventos</a>
+                <a class="text-decoration-none text-muted" asp-controller="Proyectos" asp-action="Index">Proyectos</a>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <a class="text-decoration-none text-muted" asp-controller="Eventos" asp-action="MisRegistros">Mis registros</a>
+                }
+                else
+                {
+                    <a class="text-decoration-none text-muted" asp-controller="Cuenta" asp-action="Registrar">Crear cuenta</a>
+                }
+            </div>
+        </div>
+    </footer>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

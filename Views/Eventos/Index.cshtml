@@ -1,0 +1,406 @@
+@model IEnumerable<Evento>
+@{
+    ViewData["Title"] = "Eventos y proyectos universitarios";
+    var eventos = Model?.ToList() ?? new List<Evento>();
+    var proyectos = ViewBag.Proyectos as List<Proyecto> ?? new List<Proyecto>();
+    var eventosRegistradosIds = ViewBag.EventosRegistradosIds as HashSet<int> ?? new HashSet<int>();
+    var proyectosRegistradosIds = ViewBag.ProyectosRegistradosIds as HashSet<int> ?? new HashSet<int>();
+    var notificacionesNoLeidas = ViewBag.NotificacionesNoLeidas as List<Notificacion> ?? new List<Notificacion>();
+    var usuarioActualId = ViewBag.UsuarioActualId as int? ?? 0;
+    var esAdmin = User.IsInRole("Administrador") || User.IsInRole("Admin");
+    var totalPublicaciones = eventos.Count + proyectos.Count;
+
+    string[] imagenesEventos =
+    [
+        "/img/evento-1.svg",
+        "/img/evento-2.svg",
+        "/img/evento-3.svg"
+    ];
+
+    string[] imagenesProyectos =
+    [
+        "/img/proyecto-1.svg",
+        "/img/proyecto-2.svg",
+        "/img/proyecto-3.svg"
+    ];
+
+    static string ObtenerIniciales(string? texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto))
+        {
+            return "UN";
+        }
+
+        var partes = texto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return string.Concat(partes.Take(2).Select(p => char.ToUpperInvariant(p[0])));
+    }
+}
+
+<!-- Hero Section -->
+<section class="nexo-hero">
+    <div>
+        <div class="nexo-eyebrow">
+            <span class="nexo-eyebrow-dot"></span>
+            <span>HECHO EN EL CAMPUS</span>
+        </div>
+
+        <h1 class="nexo-hero-title">
+            Ideas que merecen encontrarse.
+        </h1>
+
+        <p class="nexo-hero-subtitle">
+            Descubre eventos académicos, culturales y tecnológicos, súmate a proyectos estudiantiles y conecta con las personas que están moviendo tu universidad.
+        </p>
+
+        <div class="nexo-hero-actions">
+            <a href="#explorar" class="btn-nexo-primary nexo-cta-lg">
+                <span>Explorar ahora</span>
+                <span aria-hidden="true">→</span>
+            </a>
+
+            <a asp-controller="Proyectos" asp-action="Crear" class="nexo-link-underline">
+                <span>Comparte tu idea</span>
+                <span aria-hidden="true">✎</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="nexo-hero-art" aria-hidden="true">
+        <span class="nexo-star-coral">✦</span>
+        <div class="nexo-shape-pill"></div>
+        <div class="nexo-shape-circle"></div>
+        <span class="nexo-star-violet">✦</span>
+    </div>
+</section>
+
+@if (TempData["Mensaje"] is string mensaje)
+{
+    <div class="nexo-toast" role="status">
+        <span class="nexo-toast-dot">✓</span>
+        <span>@mensaje</span>
+    </div>
+}
+
+@if (notificacionesNoLeidas.Any())
+{
+    <section class="nexo-panel mb-4 p-4" style="border-left: 5px solid var(--nexo-coral);">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <div class="nexo-eyebrow mb-0" style="color: var(--nexo-coral);">
+                <span class="nexo-eyebrow-dot" style="background-color: var(--nexo-coral);"></span>
+                <span>AVISOS DE CAMBIOS EN TUS EVENTOS / PROYECTOS (@notificacionesNoLeidas.Count)</span>
+            </div>
+            <form asp-controller="Eventos" asp-action="MarcarTodasLeidas" method="post" class="m-0">
+                <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                <button type="submit" class="btn-nexo-ghost small">Marcar avisos como leídos</button>
+            </form>
+        </div>
+
+        <div class="d-flex flex-column gap-2">
+            @foreach (var notif in notificacionesNoLeidas)
+            {
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 p-2 rounded-3" style="background-color: var(--nexo-bg);">
+                    <div>
+                        <strong class="d-block">@notif.Titulo</strong>
+                        <span class="text-muted small">@notif.Mensaje</span>
+                        <span class="text-muted ms-2" style="font-size: 0.75rem;">(@notif.FechaCreacion.ToLocalTime().ToString("dd MMM · HH:mm"))</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        @if (notif.IdEvento.HasValue)
+                        {
+                            <a asp-controller="Eventos" asp-action="Detalle" asp-route-id="@notif.IdEvento" class="btn-nexo-outline py-1 px-3 small">
+                                Ver evento →
+                            </a>
+                        }
+                        else if (notif.IdProyecto.HasValue)
+                        {
+                            <a asp-controller="Proyectos" asp-action="Detalle" asp-route-id="@notif.IdProyecto" class="btn-nexo-outline py-1 px-3 small">
+                                Ver proyecto →
+                            </a>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+<!-- Catálogo / Explorador -->
+<section id="explorar" class="nexo-section">
+    <div class="nexo-catalog-header">
+        <h2 class="nexo-section-title">Descubre lo que viene</h2>
+
+        <div class="nexo-search-box">
+            <span class="nexo-search-icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+            </span>
+            <input type="search"
+                   class="nexo-search-input"
+                   placeholder="Buscar ideas, temas, lugares..."
+                   aria-label="Buscar eventos o proyectos"
+                   data-nexo-search />
+        </div>
+    </div>
+
+    <div class="nexo-filter-bar">
+        <div class="nexo-filter-pills" role="tablist" aria-label="Filtrar por tipo">
+            <button type="button" class="nexo-pill active" data-nexo-filter="todo">Todo</button>
+            <button type="button" class="nexo-pill" data-nexo-filter="evento">Eventos</button>
+            <button type="button" class="nexo-pill" data-nexo-filter="proyecto">Proyectos</button>
+        </div>
+
+        <div class="nexo-count-label"
+             data-nexo-counter
+             data-singular="publicación"
+             data-plural="publicaciones">
+            @totalPublicaciones @(totalPublicaciones == 1 ? "publicación" : "publicaciones")
+        </div>
+    </div>
+
+    @if (totalPublicaciones == 0)
+    {
+        <div class="nexo-empty">
+            <h3 class="h5 fw-bold mb-2">Aún no hay publicaciones en el campus</h3>
+            <p class="text-muted mb-4">Sé la primera persona en compartir un proyecto académico o registrar un evento universitario.</p>
+            <a asp-controller="Proyectos" asp-action="Crear" class="btn-nexo-primary">
+                + Publicar proyecto
+            </a>
+        </div>
+    }
+    else
+    {
+        var indice = 1;
+        <div class="nexo-grid">
+            @foreach (var evento in eventos)
+            {
+                var numeroTexto = indice.ToString("D2");
+                var imagenUrl = !string.IsNullOrWhiteSpace(evento.ImagenUrl)
+                    ? evento.ImagenUrl
+                    : imagenesEventos[(indice - 1) % imagenesEventos.Length];
+                var claseBadge = indice % 2 == 0 ? "badge-evento-alt" : "";
+                var nombreOrganizador = $"{evento.Organizador?.Nombres} {evento.Organizador?.ApellidoPaterno}".Trim();
+                if (string.IsNullOrWhiteSpace(nombreOrganizador))
+                {
+                    nombreOrganizador = "Comunidad Universitaria";
+                }
+                var inicialesOrg = ObtenerIniciales(nombreOrganizador);
+                var estaRegistrado = eventosRegistradosIds.Contains(evento.IdEvento);
+                var totalInscritosEvento = evento.Registros?.Count ?? 0;
+                var palabrasClave = $"{evento.Nombre} {evento.Descripcion} {evento.Lugar} {nombreOrganizador} evento";
+                indice++;
+
+                <article class="nexo-card"
+                         data-nexo-item
+                         data-nexo-type="evento"
+                         data-nexo-keywords="@palabrasClave">
+                    <a asp-controller="Eventos" asp-action="Detalle" asp-route-id="@evento.IdEvento" class="nexo-card-media d-block text-decoration-none">
+                        <span class="nexo-badge-type @claseBadge">EVENTO</span>
+                        <img src="@imagenUrl" alt="@evento.Nombre" loading="lazy" />
+                        <span class="nexo-card-index">@numeroTexto</span>
+                    </a>
+
+                    <div class="nexo-card-body">
+                        <div class="nexo-card-category">@evento.Lugar</div>
+                        <h3 class="nexo-card-title">
+                            <a asp-controller="Eventos" asp-action="Detalle" asp-route-id="@evento.IdEvento" class="nexo-card-link">
+                                @evento.Nombre
+                            </a>
+                        </h3>
+                        <p class="nexo-card-desc">@evento.Descripcion</p>
+
+                        <div class="nexo-card-meta">
+                            <span class="nexo-meta-item" title="Fecha y hora">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                                <span>@evento.FechaHora.ToString("dd MMM · HH:mm").ToUpperInvariant()</span>
+                            </span>
+
+                            <span class="nexo-meta-item" title="Lugar">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                    <circle cx="12" cy="10" r="3"></circle>
+                                </svg>
+                                <span>@evento.Lugar</span>
+                            </span>
+
+                            <a asp-controller="Eventos"
+                               asp-action="Detalle"
+                               asp-route-id="@evento.IdEvento"
+                               asp-fragment="asistentes"
+                               class="nexo-meta-item text-decoration-none"
+                               style="color: var(--nexo-teal);"
+                               title="Ver lista de personas registradas al evento">
+                                <span>+ @totalInscritosEvento @(totalInscritosEvento == 1 ? "asistente" : "asistentes")</span>
+                            </a>
+                        </div>
+
+                        <div class="nexo-card-footer">
+                            <div class="nexo-author" title="Organizador: @nombreOrganizador">
+                                <span class="nexo-avatar">@inicialesOrg</span>
+                                <span class="nexo-author-name">@nombreOrganizador</span>
+                            </div>
+
+                            <div class="d-flex align-items-center gap-2">
+                                @if (esAdmin || (usuarioActualId > 0 && evento.IdUsuarioOrganizador == usuarioActualId))
+                                {
+                                    <a asp-controller="Eventos"
+                                       asp-action="Editar"
+                                       asp-route-id="@evento.IdEvento"
+                                       class="btn-nexo-outline py-1 px-2 small"
+                                       title="Editar evento">
+                                        Editar
+                                    </a>
+                                }
+                                @if (User.Identity?.IsAuthenticated == true)
+                                {
+                                    if (estaRegistrado)
+                                    {
+                                        <span class="btn-nexo-registered">✓ Inscrito</span>
+                                    }
+                                    else
+                                    {
+                                        <form asp-controller="Eventos" asp-action="RegistrarInteres" asp-route-id="@evento.IdEvento" method="post" class="m-0">
+                                            <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                                            <button type="submit" class="btn-nexo-interest">
+                                                <span>Registrarme</span>
+                                            </button>
+                                        </form>
+                                    }
+                                }
+
+                                <a asp-controller="Eventos"
+                                   asp-action="Detalle"
+                                   asp-route-id="@evento.IdEvento"
+                                   class="nexo-circle-btn"
+                                   title="Ver evento y lista de asistentes">
+                                    <span aria-hidden="true">→</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            }
+
+            @foreach (var proyecto in proyectos)
+            {
+                var numeroTexto = indice.ToString("D2");
+                var imagenUrl = !string.IsNullOrWhiteSpace(proyecto.ImagenUrl)
+                    ? proyecto.ImagenUrl
+                    : imagenesProyectos[(indice - 1) % imagenesProyectos.Length];
+                var inicialesResp = ObtenerIniciales(proyecto.NombreResponsable);
+                var nombreCarrera = proyecto.Carrera?.Nombre ?? "Proyecto universitario";
+                var estaRegistradoProyecto = proyectosRegistradosIds.Contains(proyecto.IdProyecto);
+                var puedeEditarProyecto = esAdmin || (usuarioActualId > 0 && proyecto.IdUsuario == usuarioActualId);
+                var totalColaboradores = proyecto.Registros?.Count ?? 0;
+                var palabrasClave = $"{proyecto.Nombre} {proyecto.Descripcion} {proyecto.NombreResponsable} {nombreCarrera} proyecto";
+                indice++;
+
+                <article class="nexo-card"
+                         data-nexo-item
+                         data-nexo-type="proyecto"
+                         data-nexo-keywords="@palabrasClave">
+                    <a asp-controller="Proyectos" asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="nexo-card-media d-block text-decoration-none">
+                        <span class="nexo-badge-type badge-proyecto">PROYECTO</span>
+                        <img src="@imagenUrl" alt="@proyecto.Nombre" loading="lazy" />
+                        <span class="nexo-card-index">@numeroTexto</span>
+                    </a>
+
+                    <div class="nexo-card-body">
+                        <div class="nexo-card-category">@nombreCarrera</div>
+                        <h3 class="nexo-card-title">
+                            <a asp-controller="Proyectos" asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="nexo-card-link">
+                                @proyecto.Nombre
+                            </a>
+                        </h3>
+                        <p class="nexo-card-desc">@proyecto.Descripcion</p>
+
+                        <div class="nexo-card-meta">
+                            <span class="nexo-meta-item" title="Periodo de inicio a fin">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                                <span>@proyecto.FechaInicio.ToString("dd MMM") – @proyecto.FechaFin.ToString("dd MMM yyyy")</span>
+                            </span>
+
+                            <span class="nexo-meta-item" title="Lugar de reunión">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                    <circle cx="12" cy="10" r="3"></circle>
+                                </svg>
+                                <span>@proyecto.LugarReunion</span>
+                            </span>
+
+                            <a asp-controller="Proyectos"
+                               asp-action="Detalle"
+                               asp-route-id="@proyecto.IdProyecto"
+                               asp-fragment="colaboradores"
+                               class="nexo-meta-item text-decoration-none"
+                               style="color: var(--nexo-teal);"
+                               title="Ver colaboradores inscritos">
+                                <span>+ @totalColaboradores @(totalColaboradores == 1 ? "colaborador" : "colaboradores")</span>
+                            </a>
+                        </div>
+
+                        <div class="nexo-card-footer">
+                            <div class="nexo-author" title="Responsable: @proyecto.NombreResponsable">
+                                <span class="nexo-avatar">@inicialesResp</span>
+                                <span class="nexo-author-name">@proyecto.NombreResponsable</span>
+                            </div>
+
+                            <div class="d-flex align-items-center gap-2">
+                                @if (puedeEditarProyecto)
+                                {
+                                    <a asp-controller="Proyectos"
+                                       asp-action="Editar"
+                                       asp-route-id="@proyecto.IdProyecto"
+                                       class="btn-nexo-outline py-1 px-2 small"
+                                       title="Editar proyecto">
+                                        Editar
+                                    </a>
+                                }
+                                @if (User.Identity?.IsAuthenticated == true)
+                                {
+                                    if (estaRegistradoProyecto)
+                                    {
+                                        <span class="btn-nexo-registered">✓ Inscrito</span>
+                                    }
+                                    else
+                                    {
+                                        <form asp-controller="Proyectos" asp-action="RegistrarInteres" asp-route-id="@proyecto.IdProyecto" method="post" class="m-0">
+                                            <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                                            <button type="submit" class="btn-nexo-interest">
+                                                <span>Sumarme</span>
+                                            </button>
+                                        </form>
+                                    }
+                                }
+
+                                <a asp-controller="Proyectos"
+                                   asp-action="Detalle"
+                                   asp-route-id="@proyecto.IdProyecto"
+                                   class="nexo-circle-btn"
+                                   title="Ver proyecto en grande">
+                                    <span aria-hidden="true">→</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+
+        <div class="nexo-empty mt-4" data-nexo-empty-filter style="display: none;">
+            <h3 class="h5 fw-bold mb-2">No encontramos resultados para tu búsqueda</h3>
+            <p class="text-muted mb-0">Prueba con otros términos o cambia el filtro de categoría.</p>
+        </div>
+    }
+</section>

@@ -1,0 +1,88 @@
+@model RegistroUsuarioViewModel
+@{
+    ViewData["Title"] = "Crear cuenta";
+}
+
+<section class="nexo-form-shell">
+    <div class="text-center mb-4">
+        <div class="nexo-eyebrow justify-content-center">
+            <span class="nexo-eyebrow-dot"></span>
+            <span>REGISTRO DE ESTUDIANTES · UNISON</span>
+        </div>
+        <h1 class="nexo-section-title">Únete a la comunidad del campus</h1>
+        <p class="text-muted mt-2 mb-0">
+            Crea tu cuenta para inscribirte en eventos universitarios y compartir tus proyectos académicos.
+        </p>
+    </div>
+
+    <div class="nexo-panel">
+        <form asp-action="Registrar" method="post">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger rounded-3"></div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label asp-for="Nombres" class="nexo-label"></label>
+                    <input asp-for="Nombres" class="nexo-input" placeholder="Ej. Ana Sofía" />
+                    <span asp-validation-for="Nombres" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="ApellidoPaterno" class="nexo-label"></label>
+                    <input asp-for="ApellidoPaterno" class="nexo-input" placeholder="Ej. López" />
+                    <span asp-validation-for="ApellidoPaterno" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="ApellidoMaterno" class="nexo-label"></label>
+                    <input asp-for="ApellidoMaterno" class="nexo-input" placeholder="Ej. Rivera (opcional)" />
+                    <span asp-validation-for="ApellidoMaterno" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label asp-for="Correo" class="nexo-label"></label>
+                    <input asp-for="Correo" class="nexo-input" placeholder="estudiante@unison.mx" autocomplete="email" />
+                    <span asp-validation-for="Correo" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label asp-for="IdCarrera" class="nexo-label"></label>
+                    <select asp-for="IdCarrera" asp-items="ViewBag.Carreras" class="nexo-select">
+                        <option value="">Selecciona tu carrera (opcional)</option>
+                    </select>
+                    <span asp-validation-for="IdCarrera" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label asp-for="Contrasena" class="nexo-label"></label>
+                    <input asp-for="Contrasena" class="nexo-input" placeholder="Mínimo 8 caracteres" autocomplete="new-password" />
+                    <span asp-validation-for="Contrasena" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label asp-for="ConfirmarContrasena" class="nexo-label"></label>
+                    <input asp-for="ConfirmarContrasena" class="nexo-input" placeholder="Repite tu contraseña" autocomplete="new-password" />
+                    <span asp-validation-for="ConfirmarContrasena" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 pt-2">
+                <a asp-action="IniciarSesion" class="nexo-link-underline small">
+                    ¿Ya tienes cuenta? Inicia sesión
+                </a>
+
+                <button type="submit" class="btn-nexo-primary">
+                    <span>Confirmar registro</span>
+                    <span aria-hidden="true">→</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

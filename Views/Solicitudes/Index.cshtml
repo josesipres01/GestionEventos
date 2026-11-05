@@ -1,0 +1,218 @@
+@model SolicitudesViewModel
+@{
+    ViewData["Title"] = "Mis solicitudes";
+
+    static string EstadoTexto(EstadoAprobacion estado) => estado switch
+    {
+        EstadoAprobacion.Aprobado => "Aprobada",
+        EstadoAprobacion.Rechazado => "Rechazada",
+        _ => "Pendiente de revisión"
+    };
+
+    static string EstadoClase(EstadoAprobacion estado) => estado switch
+    {
+        EstadoAprobacion.Aprobado => "text-bg-success",
+        EstadoAprobacion.Rechazado => "text-bg-danger",
+        _ => "text-bg-warning"
+    };
+}
+
+<section class="nexo-section">
+    <div class="mb-4">
+        <div class="nexo-eyebrow">
+            <span class="nexo-eyebrow-dot"></span>
+            <span>SEGUIMIENTO Y REVISIÓN</span>
+        </div>
+        <h1 class="nexo-section-title">Mis solicitudes</h1>
+        <p class="text-muted mt-2 mb-0">
+            @if (Model.PuedeRevisarSolicitudes)
+            {
+                <span>Consulta el estado de tus eventos y proyectos, o revisa las solicitudes que te asignaron como organizador.</span>
+            }
+            else
+            {
+                <span>Consulta el estado de tus eventos y proyectos enviados a aprobación.</span>
+            }
+        </p>
+    </div>
+
+    @if (TempData["Mensaje"] is string mensaje)
+    {
+        <div class="nexo-toast" role="status">
+            <span class="nexo-toast-dot">✓</span>
+            <span>@mensaje</span>
+        </div>
+    }
+
+    @if (Model.PuedeRevisarSolicitudes)
+    {
+    <section class="mb-5">
+        <h2 class="h4 fw-bold mb-3">Solicitudes que debo revisar (@Model.PendientesPorRevisar.Count)</h2>
+        @if (!Model.PendientesPorRevisar.Any())
+        {
+            <div class="nexo-empty py-4">
+                <p class="text-muted mb-0">No tienes solicitudes pendientes de aprobación.</p>
+            </div>
+        }
+        else
+        {
+            <div class="d-flex flex-column gap-3">
+                @foreach (var solicitud in Model.PendientesPorRevisar)
+                {
+                    <article class="nexo-panel p-4">
+                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                            <div>
+                                <span class="badge text-bg-light mb-2">@solicitud.Tipo</span>
+                                <h3 class="h5 fw-bold mb-1">@solicitud.Nombre</h3>
+                                <p class="text-muted small mb-2">
+                                    Enviada por @solicitud.Organizador el @solicitud.FechaEnvio.ToLocalTime().ToString("dd MMM yyyy · HH:mm")
+                                </p>
+                                <a href="@solicitud.UrlDetalle" class="nexo-link-underline small">Revisar publicación</a>
+                            </div>
+                            <span class="badge rounded-pill @EstadoClase(solicitud.Estado)">@EstadoTexto(solicitud.Estado)</span>
+                        </div>
+
+                        <form asp-action="Resolver@(solicitud.Tipo)" method="post" class="mt-3">
+                            <input type="hidden" name="id" value="@solicitud.Id" />
+                            <label for="comentario-@solicitud.Tipo-@solicitud.Id" class="form-label small fw-semibold">
+                                Comentario para quien envió la solicitud (obligatorio si la rechazas)
+                            </label>
+                            <textarea id="comentario-@solicitud.Tipo-@solicitud.Id"
+                                      name="comentario"
+                                      maxlength="1000"
+                                      class="form-control mb-3"
+                                      rows="2"></textarea>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button type="submit" name="aprobar" value="true" class="btn-nexo-primary">
+                                    Aprobar y publicar
+                                </button>
+                                <button type="submit" name="aprobar" value="false" class="btn-nexo-outline">
+                                    Rechazar solicitud
+                                </button>
+                            </div>
+                        </form>
+                    </article>
+                }
+            </div>
+        }
+    </section>
+    }
+
+    <section>
+        <h2 class="h4 fw-bold mb-3">Estado de mis solicitudes (@Model.MisSolicitudes.Count)</h2>
+        @if (!Model.MisSolicitudes.Any())
+        {
+            <div class="nexo-empty py-4">
+                <p class="text-muted mb-3">Todavía no has enviado eventos o proyectos para aprobación.</p>
+                <div class="d-flex justify-content-center gap-2">
+                    <a asp-controller="Eventos" asp-action="Crear" class="btn-nexo-outline">Enviar evento</a>
+                    <a asp-controller="Proyectos" asp-action="Crear" class="btn-nexo-primary">Enviar proyecto</a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="d-flex flex-column gap-3">
+                @foreach (var solicitud in Model.MisSolicitudes)
+                {
+                    <article class="nexo-panel p-4">
+                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                            <div>
+                                <span class="badge text-bg-light mb-2">@solicitud.Tipo</span>
+                                <h3 class="h5 fw-bold mb-1">@solicitud.Nombre</h3>
+                                <p class="text-muted small mb-2">
+                                    Organizador: @solicitud.Organizador · Enviada @solicitud.FechaEnvio.ToLocalTime().ToString("dd MMM yyyy · HH:mm")
+                                </p>
+                            </div>
+                            <span class="badge rounded-pill @EstadoClase(solicitud.Estado)">@EstadoTexto(solicitud.Estado)</span>
+                        </div>
+
+                        <div class="d-flex flex-wrap align-items-center gap-2 small mt-3">
+                            <span class="badge rounded-pill text-bg-success">1. Solicitud enviada</span>
+                            <span aria-hidden="true">→</span>
+                            @if (solicitud.Estado == EstadoAprobacion.Pendiente)
+                            {
+                                <span class="badge rounded-pill text-bg-warning">2. Esperando revisión</span>
+                            }
+                            else
+                            {
+                                <span class="badge rounded-pill @EstadoClase(solicitud.Estado)">
+                                    2. @EstadoTexto(solicitud.Estado) · @solicitud.FechaRevision?.ToLocalTime().ToString("dd MMM yyyy · HH:mm")
+                                </span>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(solicitud.Comentario))
+                        {
+                            <div class="alert @(solicitud.Estado == EstadoAprobacion.Rechazado ? "alert-danger" : "alert-success") mt-3 mb-0">
+                                <strong>Respuesta del organizador:</strong> @solicitud.Comentario
+                            </div>
+                        }
+                        @if (solicitud.Estado == EstadoAprobacion.Rechazado && solicitud.UrlEdicion is not null)
+                        {
+                            <a href="@solicitud.UrlEdicion" class="btn-nexo-outline mt-3">Editar y volver a enviar</a>
+                        }
+                    </article>
+                }
+            </div>
+        }
+    </section>
+
+    @if (Model.PublicacionesInactivas.Any())
+    {
+        <section class="mt-5">
+            <h2 class="h4 fw-bold mb-3">Publicaciones eliminadas de la vista pública (@Model.PublicacionesInactivas.Count)</h2>
+            <p class="text-muted">
+                Estas publicaciones fueron eliminadas y ya no aparecen en el catálogo. La reactivación de proyectos debe solicitarla el organizador responsable.
+            </p>
+            <div class="d-flex flex-column gap-3">
+                @foreach (var publicacion in Model.PublicacionesInactivas)
+                {
+                    <article class="nexo-panel p-4">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                            <div>
+                                <span class="badge text-bg-light mb-2">@publicacion.Tipo</span>
+                                <h3 class="h5 fw-bold mb-1">@publicacion.Nombre</h3>
+                                <span class="badge text-bg-secondary">Eliminada</span>
+                                @if (!string.IsNullOrWhiteSpace(publicacion.MotivoEliminacion))
+                                {
+                                    <p class="text-muted mb-0 mt-2">
+                                        <strong>Motivo de eliminación:</strong> @publicacion.MotivoEliminacion
+                                    </p>
+                                }
+                                @if (publicacion.ReactivacionSolicitada)
+                                {
+                                    <span class="badge text-bg-warning">Esperando respuesta del administrador</span>
+                                }
+                            </div>
+                            @if (publicacion.Tipo == "Evento" &&
+                                 publicacion.PuedeSolicitarReactivacion &&
+                                 !publicacion.ReactivacionSolicitada)
+                            {
+                                <form asp-action="SolicitarReactivacion" method="post" class="m-0">
+                                    <input type="hidden" name="tipo" value="@publicacion.Tipo" />
+                                    <input type="hidden" name="id" value="@publicacion.Id" />
+                                    <button type="submit" class="btn-nexo-outline">
+                                        Solicitar reactivación al administrador
+                                    </button>
+                                </form>
+                            }
+                            else if (publicacion.Tipo == "Proyecto" &&
+                                     publicacion.PuedeSolicitarReactivacion &&
+                                     !publicacion.ReactivacionSolicitada)
+                            {
+                                <form asp-action="SolicitarReactivacion" method="post" class="m-0">
+                                    <input type="hidden" name="tipo" value="@publicacion.Tipo" />
+                                    <input type="hidden" name="id" value="@publicacion.Id" />
+                                    <button type="submit" class="btn-nexo-outline">
+                                        Solicitar reactivación al administrador
+                                    </button>
+                                </form>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        </section>
+    }
+</section>

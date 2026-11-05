@@ -1,0 +1,257 @@
+@model IEnumerable<Evento>
+@{
+    ViewData["Title"] = "Panel del Organizador";
+    var misEventos = Model?.ToList() ?? new List<Evento>();
+    var proyectosACargo = ViewBag.ProyectosACargo as List<Proyecto> ?? new List<Proyecto>();
+    var esAdmin = ViewBag.EsAdministrador as bool? ?? false;
+    var totalInscritosEnMisEventos = misEventos.Sum(e => e.Registros?.Count ?? 0);
+
+    string[] imagenesEventos =
+    [
+        "/img/evento-1.svg",
+        "/img/evento-2.svg",
+        "/img/evento-3.svg"
+    ];
+
+    string[] imagenesProyectos =
+    [
+        "/img/proyecto-1.svg",
+        "/img/proyecto-2.svg",
+        "/img/proyecto-3.svg"
+    ];
+}
+
+<section class="nexo-section">
+    <div class="mb-4">
+        <div class="nexo-eyebrow">
+            <span class="nexo-eyebrow-dot"></span>
+            <span>GESTIÓN ACADÉMICA · PANEL DE ORGANIZADOR</span>
+        </div>
+
+        <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 pb-3 border-bottom">
+            <div>
+                <h1 class="nexo-section-title">Mis eventos y proyectos a cargo</h1>
+                <p class="text-muted mt-2 mb-0">
+                    Administra los eventos que organizas, consulta las listas de asistencia y da seguimiento a los proyectos académicos donde eres responsable.
+                </p>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2">
+                <a asp-action="Crear" class="btn-nexo-primary">
+                    <span>+ Publicar nuevo evento</span>
+                </a>
+                <a asp-controller="Proyectos" asp-action="Crear" class="btn-nexo-outline">
+                    + Publicar proyecto
+                </a>
+            </div>
+        </div>
+    </div>
+
+    @if (TempData["Mensaje"] is string mensaje)
+    {
+        <div class="nexo-toast" role="status">
+            <span class="nexo-toast-dot">✓</span>
+            <span>@mensaje</span>
+        </div>
+    }
+
+    <!-- Resumen rápido del Organizador -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="nexo-panel p-3 h-100">
+                <div class="text-muted small text-uppercase fw-bold">Eventos Organizados</div>
+                <div class="display-6 fw-bold mt-1" style="color: var(--nexo-forest);">@misEventos.Count</div>
+                <div class="text-muted small mt-1">
+                    @(esAdmin ? "Mostrando todos los eventos del campus" : "Creados desde tu cuenta de organizador")
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="nexo-panel p-3 h-100">
+                <div class="text-muted small text-uppercase fw-bold">Asistentes Registrados</div>
+                <div class="display-6 fw-bold mt-1" style="color: var(--nexo-teal);">@totalInscritosEnMisEventos</div>
+                <div class="text-muted small mt-1">
+                    Inscripciones acumuladas en tus eventos
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="nexo-panel p-3 h-100">
+                <div class="text-muted small text-uppercase fw-bold">Proyectos bajo tu Responsabilidad</div>
+                <div class="display-6 fw-bold mt-1" style="color: var(--nexo-violet);">@proyectosACargo.Count</div>
+                <div class="text-muted small mt-1">
+                    Iniciativas estudiantiles vinculadas a tu perfil
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sección 1: Mis Eventos Organizados -->
+    <div class="mb-5">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="h4 fw-bold mb-0">Eventos que organizo (@misEventos.Count)</h2>
+        </div>
+
+        @if (!misEventos.Any())
+        {
+            <div class="nexo-empty">
+                <h3 class="h5 fw-bold mb-2">Aún no has publicado ningún evento</h3>
+                <p class="text-muted mb-4">Publica tu primer evento universitario para que los estudiantes puedan registrarse en la cartelera.</p>
+                <a asp-action="Crear" class="btn-nexo-primary">+ Publicar evento</a>
+            </div>
+        }
+        else
+        {
+            var idx = 1;
+            <div class="nexo-grid">
+                @foreach (var evento in misEventos)
+                {
+                    var numeroTexto = idx.ToString("D2");
+                    var imagenUrl = !string.IsNullOrWhiteSpace(evento.ImagenUrl)
+                        ? evento.ImagenUrl
+                        : imagenesEventos[(idx - 1) % imagenesEventos.Length];
+                    var totalInscritos = evento.Registros?.Count ?? 0;
+                    idx++;
+
+                    <article class="nexo-card">
+                        <a asp-action="Detalle" asp-route-id="@evento.IdEvento" class="nexo-card-media d-block text-decoration-none">
+                            <span class="nexo-badge-type">MI EVENTO</span>
+                            <img src="@imagenUrl" alt="@evento.Nombre" loading="lazy" />
+                            <span class="nexo-card-index">@numeroTexto</span>
+                        </a>
+
+                        <div class="nexo-card-body">
+                            <div class="nexo-card-category">@evento.Lugar</div>
+                            @if (!evento.Activo)
+                            {
+                                <span class="badge text-bg-secondary mb-2">Eliminado</span>
+                            }
+                            <h3 class="nexo-card-title">
+                                <a asp-action="Detalle" asp-route-id="@evento.IdEvento" class="nexo-card-link">
+                                    @evento.Nombre
+                                </a>
+                            </h3>
+                            <p class="nexo-card-desc">@evento.Descripcion</p>
+
+                            <div class="nexo-card-meta">
+                                <span class="nexo-meta-item">
+                                    <span>@evento.FechaHora.ToString("dd MMM yyyy · HH:mm").ToUpperInvariant()</span>
+                                </span>
+                                <a asp-action="Inscritos"
+                                   asp-route-id="@evento.IdEvento"
+                                   class="nexo-meta-item text-decoration-none fw-bold"
+                                   style="color: var(--nexo-teal);">
+                                    <span>@totalInscritos @(totalInscritos == 1 ? "inscrito" : "inscritos") →</span>
+                                </a>
+                            </div>
+
+                            <div class="nexo-card-footer">
+                                <div class="d-flex flex-wrap gap-2">
+                                    <a asp-action="Inscritos" asp-route-id="@evento.IdEvento" class="btn-nexo-interest text-decoration-none">
+                                        Lista de inscritos (@totalInscritos)
+                                    </a>
+                                    @if (evento.Activo)
+                                    {
+                                        <a asp-action="Editar" asp-route-id="@evento.IdEvento" class="btn-nexo-outline py-1 px-3 small">
+                                            Editar
+                                        </a>
+                                    }
+                                </div>
+
+                            </div>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </div>
+
+    <!-- Sección 2: Proyectos Académicos donde el Organizador es Responsable -->
+    <div>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="h4 fw-bold mb-0">Proyectos académicos bajo mi responsabilidad (@proyectosACargo.Count)</h2>
+        </div>
+
+        @if (!proyectosACargo.Any())
+        {
+            <div class="nexo-empty py-4">
+                <p class="fw-semibold mb-1">Aún no tienes proyectos asignados bajo tu responsabilidad.</p>
+                <p class="text-muted small mb-0">Cuando un estudiante publique un proyecto y te elija como docente/organizador responsable, aparecerá aquí.</p>
+            </div>
+        }
+        else
+        {
+            var idxP = 1;
+            <div class="nexo-grid">
+                @foreach (var proyecto in proyectosACargo)
+                {
+                    var numeroTexto = idxP.ToString("D2");
+                    var imagenUrl = !string.IsNullOrWhiteSpace(proyecto.ImagenUrl)
+                        ? proyecto.ImagenUrl
+                        : imagenesProyectos[(idxP - 1) % imagenesProyectos.Length];
+                    var autor = proyecto.Usuario is not null
+                        ? $"{proyecto.Usuario.Nombres} {proyecto.Usuario.ApellidoPaterno}".Trim()
+                        : "Estudiante UNISON";
+                    var totalColab = proyecto.Registros?.Count ?? 0;
+                    idxP++;
+
+                    <article class="nexo-card">
+                        <a asp-controller="Proyectos" asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="nexo-card-media d-block text-decoration-none">
+                            <span class="nexo-badge-type badge-proyecto">RESPONSABLE</span>
+                            <img src="@imagenUrl" alt="@proyecto.Nombre" loading="lazy" />
+                            <span class="nexo-card-index">@numeroTexto</span>
+                        </a>
+
+                        <div class="nexo-card-body">
+                            <div class="nexo-card-category">@(proyecto.Carrera?.Nombre ?? "General")</div>
+                            @if (!proyecto.Activo)
+                            {
+                                <span class="badge text-bg-secondary mb-2">Eliminado</span>
+                            }
+                            <h3 class="nexo-card-title">
+                                <a asp-controller="Proyectos" asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="nexo-card-link">
+                                    @proyecto.Nombre
+                                </a>
+                            </h3>
+                            <p class="nexo-card-desc">@proyecto.Descripcion</p>
+
+                            <div class="nexo-card-meta">
+                                <span class="nexo-meta-item">
+                                    <span><strong>Autor:</strong> @autor</span>
+                                </span>
+                                <span class="nexo-meta-item">
+                                    <span>+ @totalColab @(totalColab == 1 ? "colaborador" : "colaboradores")</span>
+                                </span>
+                            </div>
+
+                            <div class="nexo-card-footer">
+                                <span class="text-muted small">
+                                    Publicado el @proyecto.FechaPublicacion.ToLocalTime().ToString("dd MMM yyyy")
+                                </span>
+                                <div class="d-flex gap-2">
+                                    @if (proyecto.Activo)
+                                    {
+                                        <a asp-controller="Proyectos"
+                                           asp-action="Editar"
+                                           asp-route-id="@proyecto.IdProyecto"
+                                           class="btn-nexo-outline py-1 px-3 small">
+                                            Editar
+                                        </a>
+                                    }
+                                    <a asp-controller="Proyectos"
+                                       asp-action="Detalle"
+                                       asp-route-id="@proyecto.IdProyecto"
+                                       class="btn-nexo-outline py-1 px-3 small">
+                                        Ver proyecto →
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </div>
+</section>

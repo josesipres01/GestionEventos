@@ -1,0 +1,90 @@
+@model IEnumerable<Carrera>
+@{
+    ViewData["Title"] = "Gestión de Carreras";
+    var carreras = Model?.ToList() ?? new List<Carrera>();
+}
+
+<section class="nexo-section">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <a asp-action="Index" class="btn-nexo-outline">← Volver al panel</a>
+    </div>
+
+    <div class="mb-4">
+        <div class="nexo-eyebrow">
+            <span class="nexo-eyebrow-dot"></span>
+            <span>CATÁLOGO ACADÉMICO · CARRERAS Y DEPARTAMENTOS</span>
+        </div>
+        <h1 class="nexo-section-title">Carreras registradas (@carreras.Count)</h1>
+        <p class="text-muted mt-2 mb-0">
+            Administra los programas educativos disponibles para el registro de usuarios y proyectos académicos.
+        </p>
+    </div>
+
+    @if (TempData["Mensaje"] is string mensaje)
+    {
+        <div class="nexo-toast" role="status">
+            <span class="nexo-toast-dot">✓</span>
+            <span>@mensaje</span>
+        </div>
+    }
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="nexo-panel">
+                <h2 class="h5 fw-bold mb-3">Agregar nueva carrera o departamento</h2>
+                <form asp-action="CrearCarrera" method="post">
+                    <div class="mb-3">
+                        <label for="nombre" class="nexo-label">Nombre de la carrera</label>
+                        <input type="text" id="nombre" name="nombre" class="nexo-input" maxlength="120" required placeholder="Ej. Ingeniería Industrial y de Sistemas" />
+                    </div>
+                    <button type="submit" class="btn-nexo-primary w-100 justify-content-center">
+                        <span>+ Agregar al catálogo</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="nexo-panel">
+                <h2 class="h5 fw-bold mb-3">Carreras actuales</h2>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr class="text-muted small text-uppercase">
+                                <th>Carrera</th>
+                                <th>Usuarios</th>
+                                <th>Proyectos</th>
+                                <th class="text-end">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var carrera in carreras)
+                            {
+                                var totalUsuarios = carrera.Usuarios?.Count ?? 0;
+                                var totalProyectos = carrera.Proyectos?.Count ?? 0;
+                                <tr>
+                                    <td class="fw-semibold">@carrera.Nombre</td>
+                                    <td>@totalUsuarios</td>
+                                    <td>@totalProyectos</td>
+                                    <td class="text-end">
+                                        @if (totalUsuarios == 0 && totalProyectos == 0)
+                                        {
+                                            <form asp-action="EliminarCarrera" asp-route-id="@carrera.IdCarrera" method="post" class="d-inline m-0">
+                                                <button type="submit" class="btn-nexo-ghost small">Eliminar</button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small">En uso</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
