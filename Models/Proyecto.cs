@@ -4,20 +4,21 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace GestionEventos.Models;
 
 [Table("PROYECTOS")]
-public class Proyecto
+public class Proyecto : IAprobacionPublicacion
 {
     [Key]
     [Column("IdProyecto")]
     public int IdProyecto { get; set; }
 
-    public int IdUsuario { get; set; }
-    public int? IdUsuarioResponsable { get; set; }
+    public int IdUsuarioCreador { get; set; }
+    public int? IdUsuarioOrganizador { get; set; }
     public bool Activo { get; set; } = true;
     public bool ReactivacionSolicitada { get; set; }
     public DateTime? FechaSolicitudReactivacion { get; set; }
     [StringLength(1000)]
     public string? MotivoEliminacion { get; set; }
     public DateTime? FechaEliminacion { get; set; }
+    public int? IdUsuarioEliminador { get; set; }
 
     [Required]
     [StringLength(150)]
@@ -25,10 +26,6 @@ public class Proyecto
 
     [Required]
     public string Descripcion { get; set; } = string.Empty;
-
-    [Required]
-    [StringLength(150)]
-    public string NombreResponsable { get; set; } = string.Empty;
 
     [Required]
     [StringLength(150)]
@@ -48,9 +45,10 @@ public class Proyecto
     [StringLength(1000)]
     public string? ComentarioAprobacion { get; set; }
     public DateTime? FechaRevision { get; set; }
+    public int? IdUsuarioRevisor { get; set; }
 
-    public Usuario Usuario { get; set; } = null!;
-    public Usuario? OrganizadorResponsable { get; set; }
+    public Usuario Creador { get; set; } = null!;
+    public Usuario? Organizador { get; set; }
     public Carrera Carrera { get; set; } = null!;
     public ICollection<RegistroProyecto> Registros { get; set; } = new List<RegistroProyecto>();
 }

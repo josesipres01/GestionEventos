@@ -30,118 +30,9 @@ using (var scope = app.Services.CreateScope())
         var db = scope.ServiceProvider.GetRequiredService<GestionEventosDbContext>();
         var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<Usuario>>();
 
-        await db.Database.ExecuteSqlRawAsync("""
-            IF COL_LENGTH('dbo.EVENTOS', 'ImagenUrl') IS NULL
-            BEGIN
-                ALTER TABLE EVENTOS ADD ImagenUrl NVARCHAR(500) NULL;
-            END
-
-            IF COL_LENGTH('dbo.EVENTOS', 'IdUsuarioSolicitante') IS NULL
-            BEGIN
-                ALTER TABLE EVENTOS ADD IdUsuarioSolicitante INT NULL;
-            END
-
-            IF COL_LENGTH('dbo.EVENTOS', 'EstadoAprobacion') IS NULL
-            BEGIN
-                ALTER TABLE dbo.EVENTOS ADD EstadoAprobacion NVARCHAR(20) NOT NULL
-                    CONSTRAINT DF_EVENTOS_EstadoAprobacion DEFAULT N'Aprobado';
-            END
-
-            IF COL_LENGTH('dbo.EVENTOS', 'ComentarioAprobacion') IS NULL
-            BEGIN
-                ALTER TABLE dbo.EVENTOS ADD ComentarioAprobacion NVARCHAR(1000) NULL;
-            END
-
-            IF COL_LENGTH('dbo.EVENTOS', 'FechaRevision') IS NULL
-            BEGIN
-                ALTER TABLE dbo.EVENTOS ADD FechaRevision DATETIME2 NULL;
-            END
-
-            IF COL_LENGTH('dbo.EVENTOS', 'FechaSolicitud') IS NULL
-            BEGIN
-                ALTER TABLE dbo.EVENTOS ADD FechaSolicitud DATETIME2 NOT NULL
-                    CONSTRAINT DF_EVENTOS_FechaSolicitud DEFAULT CURRENT_TIMESTAMP;
-            END
-
-            IF COL_LENGTH('dbo.PROYECTOS', 'ImagenUrl') IS NULL
-            BEGIN
-                ALTER TABLE PROYECTOS ADD ImagenUrl NVARCHAR(500) NULL;
-            END
-
-            IF COL_LENGTH('dbo.PROYECTOS', 'IdUsuarioResponsable') IS NULL
-            BEGIN
-                ALTER TABLE dbo.PROYECTOS ADD IdUsuarioResponsable INT NULL;
-            END
-
-            IF COL_LENGTH('dbo.PROYECTOS', 'EstadoAprobacion') IS NULL
-            BEGIN
-                ALTER TABLE dbo.PROYECTOS ADD EstadoAprobacion NVARCHAR(20) NOT NULL
-                    CONSTRAINT DF_PROYECTOS_EstadoAprobacion DEFAULT N'Aprobado';
-            END
-
-            IF COL_LENGTH('dbo.PROYECTOS', 'ComentarioAprobacion') IS NULL
-            BEGIN
-                ALTER TABLE dbo.PROYECTOS ADD ComentarioAprobacion NVARCHAR(1000) NULL;
-            END
-
-            IF COL_LENGTH('dbo.PROYECTOS', 'FechaRevision') IS NULL
-            BEGIN
-                ALTER TABLE dbo.PROYECTOS ADD FechaRevision DATETIME2 NULL;
-            END
-
-            IF COL_LENGTH('dbo.PROYECTOS', 'FechaSolicitud') IS NULL
-            BEGIN
-                ALTER TABLE dbo.PROYECTOS ADD FechaSolicitud DATETIME2 NOT NULL
-                    CONSTRAINT DF_PROYECTOS_FechaSolicitud DEFAULT CURRENT_TIMESTAMP;
-            END
-
-            IF COL_LENGTH('dbo.PROYECTOS', 'LugarReunion') IS NULL
-            BEGIN
-                ALTER TABLE PROYECTOS ADD LugarReunion NVARCHAR(150) NOT NULL CONSTRAINT DF_PROYECTOS_LugarReunion DEFAULT N'Por definir';
-            END
-
-            IF COL_LENGTH('dbo.PROYECTOS', 'FechaInicio') IS NULL
-            BEGIN
-                ALTER TABLE PROYECTOS ADD FechaInicio DATETIME2 NOT NULL CONSTRAINT DF_PROYECTOS_FechaInicio DEFAULT CURRENT_TIMESTAMP;
-            END
-
-            IF COL_LENGTH('dbo.PROYECTOS', 'FechaFin') IS NULL
-            BEGIN
-                ALTER TABLE PROYECTOS ADD FechaFin DATETIME2 NOT NULL CONSTRAINT DF_PROYECTOS_FechaFin DEFAULT DATEADD(MONTH, 1, CURRENT_TIMESTAMP);
-            END
-
-            IF OBJECT_ID('dbo.REGISTROS_PROYECTOS', 'U') IS NULL
-            BEGIN
-                CREATE TABLE REGISTROS_PROYECTOS (
-                    IdRegistroProyecto INT IDENTITY(1,1) NOT NULL,
-                    IdUsuario INT NOT NULL,
-                    IdProyecto INT NOT NULL,
-                    FechaRegistro DATETIME2 NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    CONSTRAINT PK_REGISTROS_PROYECTOS PRIMARY KEY (IdRegistroProyecto),
-                    CONSTRAINT FK_REGISTROS_PROYECTOS_USUARIOS FOREIGN KEY (IdUsuario) REFERENCES USUARIOS(IdUsuario),
-                    CONSTRAINT FK_REGISTROS_PROYECTOS_PROYECTOS FOREIGN KEY (IdProyecto) REFERENCES PROYECTOS(IdProyecto),
-                    CONSTRAINT UQ_Usuario_Proyecto UNIQUE (IdUsuario, IdProyecto)
-                );
-            END
-
-            IF OBJECT_ID('dbo.NOTIFICACIONES', 'U') IS NULL
-            BEGIN
-                CREATE TABLE NOTIFICACIONES (
-                    IdNotificacion INT IDENTITY(1,1) NOT NULL,
-                    IdUsuario INT NOT NULL,
-                    IdEvento INT NULL,
-                    IdProyecto INT NULL,
-                    Titulo NVARCHAR(200) NOT NULL,
-                    Mensaje NVARCHAR(MAX) NOT NULL,
-                    Leida BIT NOT NULL DEFAULT 0,
-                    FechaCreacion DATETIME2 NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    CONSTRAINT PK_NOTIFICACIONES PRIMARY KEY (IdNotificacion),
-                    CONSTRAINT FK_NOTIFICACIONES_USUARIOS FOREIGN KEY (IdUsuario) REFERENCES USUARIOS(IdUsuario) ON DELETE CASCADE
-                );
-            END
-            """);
-
-        await InicializadorBaseDatos.PrepararEsquemaAsync(db);
+        await InicializadorBaseDatos.AdoptarEsquemaExistenteAsync(db);
+        await db.Database.MigrateAsync();
+        await InicializadorBaseDatos.PrepararDatosSemillaAsync(db);
 
         var correoAdministradorInicial = builder.Configuration["BootstrapUsers:AdminEmail"];
         var contrasenaAdministradorInicial = builder.Configuration["BootstrapUsers:AdminPassword"];
@@ -215,7 +106,7 @@ using (var scope = app.Services.CreateScope())
     }
     catch (SqlException exception)
     {
-        app.Logger.LogError(exception, "No se pudo preparar la base de datos de Gestión de Eventos.");
+        app.Logger.LogError(exception, "No se pudo migrar la base de datos de Gestión de Eventos.");
         throw;
     }
     catch (InvalidOperationException exception)

@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace GestionEventos.Models;
 
 [Table("EVENTOS")]
-public class Evento
+public class Evento : IAprobacionPublicacion
 {
     [Key]
     [Column("IdEvento")]
@@ -18,6 +18,9 @@ public class Evento
     public string Descripcion { get; set; } = string.Empty;
 
     public DateTime FechaHora { get; set; }
+    public DateTime FechaFin { get; set; }
+    [Range(1, int.MaxValue)]
+    public int? Cupo { get; set; }
 
     [Required]
     [StringLength(150)]
@@ -34,6 +37,7 @@ public class Evento
     [StringLength(1000)]
     public string? MotivoEliminacion { get; set; }
     public DateTime? FechaEliminacion { get; set; }
+    public int? IdUsuarioEliminador { get; set; }
     public DateTime FechaCreacion { get; set; }
     public DateTime FechaSolicitud { get; set; }
     public EstadoAprobacion EstadoAprobacion { get; set; } = EstadoAprobacion.Pendiente;
@@ -41,6 +45,7 @@ public class Evento
     [StringLength(1000)]
     public string? ComentarioAprobacion { get; set; }
     public DateTime? FechaRevision { get; set; }
+    public int? IdUsuarioRevisor { get; set; }
 
     [ForeignKey(nameof(IdUsuarioOrganizador))]
     public Usuario Organizador { get; set; } = null!;
