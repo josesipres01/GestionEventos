@@ -3,13 +3,27 @@
     ViewData["Title"] = Model.Nombre;
     var estaRegistrado = ViewBag.EstaRegistrado as bool? ?? false;
     var puedeEditar = ViewBag.PuedeEditar as bool? ?? false;
+    var puedeRevisarColaboradores = ViewBag.PuedeRevisarColaboradores as bool? ?? false;
+    var estadoRegistroActual = ViewBag.EstadoRegistroProyectoActual as EstadoRegistroProyecto?;
     var registros = Model.Registros
+        .Where(r => r.Estado == EstadoRegistroProyecto.Aceptado)
         .OrderByDescending(r => r.FechaRegistro)
         .ToList();
+    var solicitudesColaborador = Model.Registros
+        .Where(r => r.Estado == EstadoRegistroProyecto.Pendiente)
+        .OrderBy(r => r.FechaRegistro)
+        .ToList();
 
-    var autorNombre = Model.Usuario is not null
-        ? string.Join(" ", new[] { Model.Usuario.Nombres, Model.Usuario.ApellidoPaterno, Model.Usuario.ApellidoMaterno }.Where(s => !string.IsNullOrWhiteSpace(s)))
-        : Model.NombreResponsable;
+    var autorNombre = string.Join(
+        " ",
+        new[] { Model.Creador.Nombres, Model.Creador.ApellidoPaterno, Model.Creador.ApellidoMaterno }
+            .Where(s => !string.IsNullOrWhiteSpace(s)));
+    var nombreOrganizador = Model.Organizador is null
+        ? "Organizador pendiente"
+        : string.Join(
+            " ",
+            new[] { Model.Organizador.Nombres, Model.Organizador.ApellidoPaterno, Model.Organizador.ApellidoMaterno }
+                .Where(s => !string.IsNullOrWhiteSpace(s)));
 
     string[] imagenesProyectos =
     [
@@ -82,7 +96,7 @@
             <h1 class="nexo-detail-title">@Model.Nombre</h1>
 
             <div class="d-flex flex-wrap align-items-center gap-4 text-white-50 small">
-                <span><strong>Responsable:</strong> <span class="text-white">@Model.NombreResponsable</span></span>
+                <span><strong>Responsable:</strong> <span class="text-white">@nombreOrganizador</span></span>
                 <span><strong>Lugar de reunión:</strong> <span class="text-white">@Model.LugarReunion</span></span>
                 <span><strong>Periodo:</strong> <span class="text-white">@Model.FechaInicio.ToString("dd MMM yyyy") – @Model.FechaFin.ToString("dd MMM yyyy")</span></span>
                 <span><strong>Colaboradores inscritos:</strong> <span class="text-white">@registros.Count</span></span>
@@ -193,8 +207,8 @@
 
                 <dt class="text-muted small text-uppercase">Responsable Académico (Organizador)</dt>
                 <dd class="fw-semibold mb-3 d-flex align-items-center gap-2 mt-1">
-                    <span class="nexo-avatar">@ObtenerIniciales(Model.NombreResponsable)</span>
-                    <span>@Model.NombreResponsable</span>
+                    <span class="nexo-avatar">@ObtenerIniciales(nombreOrganizador)</span>
+                    <span>@nombreOrganizador</span>
                 </dd>
 
                 <dt class="text-muted small text-uppercase">Lugar de reunión</dt>
@@ -220,7 +234,7 @@
                 <div class="pt-3 border-top">
                     @if (User.Identity?.IsAuthenticated == true)
                     {
-                        if (estaRegistrado)
+                        if (estadoRegistroActual == EstadoRegistroProyecto.Aceptado)
                         {
                             <div class="btn-nexo-registered w-100 justify-content-center py-2 mb-2">
                                 <span>✓ Ya estás registrado en este proyecto</span>
@@ -235,6 +249,12 @@
                                 </button>
                             </form>
                         }
+                        else if (estadoRegistroActual == EstadoRegistroProyecto.Pendiente)
+                        {
+                            <div class="alert alert-info mb-0" role="status">
+                                Tu solicitud está pendiente de revisión por el organizador.
+                            </div>
+                        }
                         else
                         {
                             <form asp-controller="Proyectos"
@@ -243,7 +263,7 @@
                                   method="post">
                                 <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
                                 <button type="submit" class="btn-nexo-primary w-100 justify-content-center py-2">
-                                    <span>Registrarme en este proyecto</span>
+                                    <span>@(estadoRegistroActual == EstadoRegistroProyecto.Rechazado ? "Solicitar de nuevo" : "Solicitar unirme al proyecto")</span>
                                     <span aria-hidden="true">→</span>
                                 </button>
                             </form>
@@ -263,6 +283,44 @@
             }
         </aside>
     </div>
+
+    @if (puedeRevisarColaboradores && solicitudesColaborador.Count > 0)
+    {
+        <section class="nexo-panel mt-4" aria-labelledby="solicitudes-colaboradores-title">
+            <h2 id="solicitudes-colaboradores-title" class="h5 fw-bold mb-3">Solicitudes para colaborar</h2>
+            <div class="d-flex flex-column gap-3">
+                @foreach (var solicitud in solicitudesColaborador)
+                {
+                    var nombreSolicitante = string.Join(
+                        " ",
+                        new[] { solicitud.Usuario.Nombres, solicitud.Usuario.ApellidoPaterno, solicitud.Usuario.ApellidoMaterno }
+                            .Where(s => !string.IsNullOrWhiteSpace(s)));
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 p-3 rounded-3 border">
+                        <div>
+                            <strong>@nombreSolicitante</strong>
+                            <div class="text-muted small">@solicitud.Usuario.Correo</div>
+                            <div class="text-muted small">Solicitud: @solicitud.FechaRegistro.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <form asp-action="ResolverSolicitudColaborador" method="post" class="d-flex gap-2">
+                                <input type="hidden" name="id" value="@Model.IdProyecto" />
+                                <input type="hidden" name="idRegistroProyecto" value="@solicitud.IdRegistroProyecto" />
+                                <input type="hidden" name="aceptar" value="true" />
+                                <button type="submit" class="btn-nexo-primary py-1 px-3">Aceptar</button>
+                            </form>
+                            <form asp-action="ResolverSolicitudColaborador" method="post" class="d-flex gap-2 align-items-center">
+                                <input type="hidden" name="id" value="@Model.IdProyecto" />
+                                <input type="hidden" name="idRegistroProyecto" value="@solicitud.IdRegistroProyecto" />
+                                <input type="hidden" name="aceptar" value="false" />
+                                <input type="hidden" name="comentario" value="La solicitud no fue aceptada por el organizador." />
+                                <button type="submit" class="btn-nexo-outline py-1 px-3">Rechazar</button>
+                            </form>
+                        </div>
+                    </div>
+                }
+            </div>
+        </section>
+    }
 
     @if (puedeEditar && Model.Activo)
     {

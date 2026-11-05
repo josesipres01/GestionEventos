@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Data;
 using GestionEventos.Data;
 using GestionEventos.Models;
 using GestionEventos.ViewModels;
@@ -27,24 +28,31 @@ public class ProyectosController(
         var proyectos = await dbContext.Proyectos
             .AsNoTrackingWithIdentityResolution()
             .Include(proyecto => proyecto.Carrera)
-            .Include(proyecto => proyecto.Usuario)
+            .Include(proyecto => proyecto.Creador)
+            .Include(proyecto => proyecto.Organizador)
             .Include(proyecto => proyecto.Registros)
             .Where(proyecto => proyecto.Activo && proyecto.EstadoAprobacion == EstadoAprobacion.Aprobado)
             .OrderByDescending(proyecto => proyecto.FechaPublicacion)
             .ToListAsync();
 
         var registradosIds = new HashSet<int>();
+        var pendientesIds = new HashSet<int>();
         var usuarioActualId = 0;
         if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
         {
             usuarioActualId = usuarioId;
             registradosIds = proyectos
-                .Where(p => p.Registros.Any(r => r.IdUsuario == usuarioId))
+                .Where(p => p.Registros.Any(r => r.IdUsuario == usuarioId && r.Estado == EstadoRegistroProyecto.Aceptado))
+                .Select(p => p.IdProyecto)
+                .ToHashSet();
+            pendientesIds = proyectos
+                .Where(p => p.Registros.Any(r => r.IdUsuario == usuarioId && r.Estado == EstadoRegistroProyecto.Pendiente))
                 .Select(p => p.IdProyecto)
                 .ToHashSet();
         }
 
         ViewBag.ProyectosRegistradosIds = registradosIds;
+        ViewBag.ProyectosPendientesIds = pendientesIds;
         ViewBag.UsuarioActualId = usuarioActualId;
         return View(proyectos);
     }
@@ -56,8 +64,9 @@ public class ProyectosController(
             .AsNoTrackingWithIdentityResolution()
             .AsSplitQuery()
             .Include(item => item.Carrera)
-            .Include(item => item.Usuario)
+            .Include(item => item.Creador)
                 .ThenInclude(usuario => usuario.Carrera)
+            .Include(item => item.Organizador)
             .Include(item => item.Registros)
                 .ThenInclude(registro => registro.Usuario)
                     .ThenInclude(usuario => usuario.Carrera)
@@ -75,8 +84,8 @@ public class ProyectosController(
 
         if (proyecto.EstadoAprobacion != EstadoAprobacion.Aprobado &&
             (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var lectorId) ||
-             (proyecto.IdUsuario != lectorId &&
-              proyecto.IdUsuarioResponsable != lectorId &&
+             (proyecto.IdUsuarioCreador != lectorId &&
+              proyecto.IdUsuarioOrganizador != lectorId &&
               !User.IsInRole("Administrador") &&
               !User.IsInRole("Admin"))))
         {
@@ -92,12 +101,17 @@ public class ProyectosController(
 
             await dbContext.Notificaciones
                 .Where(n => n.IdUsuario == usuarioId && n.IdProyecto == id)
-                .ExecuteDeleteAsync();
+                .ExecuteUpdateAsync(update => update.SetProperty(n => n.Leida, true));
         }
 
-        ViewBag.EstaRegistrado = registroActual is not null;
+        ViewBag.EstaRegistrado = registroActual?.Estado == EstadoRegistroProyecto.Aceptado;
+        ViewBag.EstadoRegistroProyectoActual = registroActual?.Estado;
         ViewBag.IdRegistroProyectoActual = registroActual?.IdRegistroProyecto;
         ViewBag.PuedeEditar = puedeEditar;
+        ViewBag.PuedeRevisarColaboradores = User.IsInRole("Administrador") ||
+            User.IsInRole("Admin") ||
+            (registroActual is not null && int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var revisorId) &&
+             proyecto.IdUsuarioOrganizador == revisorId);
 
         return View(proyecto);
     }
@@ -135,20 +149,20 @@ public class ProyectosController(
             .AsNoTracking()
             .Include(usuario => usuario.Rol)
             .FirstOrDefaultAsync(usuario =>
-                usuario.IdUsuario == modelo.IdUsuarioResponsable &&
+                usuario.IdUsuario == modelo.IdUsuarioOrganizador &&
                 usuario.Activo &&
                 (usuario.IdRol == 2 || usuario.Rol.Nombre.Contains("Organizador")));
 
         if (responsable is null)
         {
             ModelState.AddModelError(
-                nameof(modelo.IdUsuarioResponsable),
+                nameof(modelo.IdUsuarioOrganizador),
                 "Selecciona un usuario válido con rol Organizador.");
         }
         else if (responsable.IdUsuario == usuarioId)
         {
             ModelState.AddModelError(
-                nameof(modelo.IdUsuarioResponsable),
+                nameof(modelo.IdUsuarioOrganizador),
                 "Selecciona a otro organizador para que revise tu solicitud.");
         }
 
@@ -160,20 +174,14 @@ public class ProyectosController(
             return View(modelo);
         }
 
-        var nombreResponsable = string.Join(
-            " ",
-            new[] { responsable!.Nombres, responsable.ApellidoPaterno, responsable.ApellidoMaterno }
-                .Where(parte => !string.IsNullOrWhiteSpace(parte)));
-
         var imagenUrl = await GuardarImagenProyectoAsync(modelo.ImagenArchivo);
 
         var nuevoProyecto = new Proyecto
         {
-            IdUsuario = usuarioId,
-            IdUsuarioResponsable = responsable!.IdUsuario,
+            IdUsuarioCreador = usuarioId,
+            IdUsuarioOrganizador = responsable!.IdUsuario,
             Nombre = modelo.Nombre.Trim(),
             Descripcion = modelo.Descripcion.Trim(),
-            NombreResponsable = nombreResponsable,
             LugarReunion = modelo.LugarReunion.Trim(),
             FechaInicio = modelo.FechaInicio.Date,
             FechaFin = modelo.FechaFin.Date,
@@ -226,9 +234,7 @@ public class ProyectosController(
                 (u.IdRol == 2 || u.Rol.Nombre.Contains("Organizador")))
             .ToListAsync();
 
-        var responsableActual = responsables.FirstOrDefault(u => u.IdUsuario == proyecto.IdUsuarioResponsable)
-            ?? responsables.FirstOrDefault(u =>
-                string.Join(" ", new[] { u.Nombres, u.ApellidoPaterno, u.ApellidoMaterno }.Where(s => !string.IsNullOrWhiteSpace(s))) == proyecto.NombreResponsable);
+        var responsableActual = responsables.FirstOrDefault(u => u.IdUsuario == proyecto.IdUsuarioOrganizador);
 
         await CargarCatalogosAsync();
 
@@ -237,7 +243,7 @@ public class ProyectosController(
             IdProyecto = proyecto.IdProyecto,
             Nombre = proyecto.Nombre,
             Descripcion = proyecto.Descripcion,
-            IdUsuarioResponsable = responsableActual?.IdUsuario ?? 0,
+            IdUsuarioOrganizador = responsableActual?.IdUsuario ?? 0,
             IdCarrera = proyecto.IdCarrera,
             LugarReunion = proyecto.LugarReunion,
             FechaInicio = proyecto.FechaInicio.Date,
@@ -286,20 +292,20 @@ public class ProyectosController(
             .AsNoTracking()
             .Include(usuario => usuario.Rol)
             .FirstOrDefaultAsync(usuario =>
-                usuario.IdUsuario == modelo.IdUsuarioResponsable &&
+                usuario.IdUsuario == modelo.IdUsuarioOrganizador &&
                 usuario.Activo &&
                 (usuario.IdRol == 2 || usuario.Rol.Nombre.Contains("Organizador")));
 
         if (responsable is null)
         {
             ModelState.AddModelError(
-                nameof(modelo.IdUsuarioResponsable),
+                nameof(modelo.IdUsuarioOrganizador),
                 "Selecciona un usuario válido con rol Organizador.");
         }
-        else if (responsable.IdUsuario == proyecto.IdUsuario)
+        else if (responsable.IdUsuario == proyecto.IdUsuarioCreador)
         {
             ModelState.AddModelError(
-                nameof(modelo.IdUsuarioResponsable),
+                nameof(modelo.IdUsuarioOrganizador),
                 "El organizador responsable debe ser distinto de quien envió el proyecto.");
         }
 
@@ -311,11 +317,6 @@ public class ProyectosController(
             await CargarCatalogosAsync();
             return View(modelo);
         }
-
-        var nombreResponsable = string.Join(
-            " ",
-            new[] { responsable!.Nombres, responsable.ApellidoPaterno, responsable.ApellidoMaterno }
-                .Where(parte => !string.IsNullOrWhiteSpace(parte)));
 
         var nuevoNombre = modelo.Nombre.Trim();
         var nuevaDescripcion = modelo.Descripcion.Trim();
@@ -329,8 +330,7 @@ public class ProyectosController(
 
         proyecto.Nombre = nuevoNombre;
         proyecto.Descripcion = nuevaDescripcion;
-        proyecto.NombreResponsable = nombreResponsable;
-        proyecto.IdUsuarioResponsable = responsable!.IdUsuario;
+        proyecto.IdUsuarioOrganizador = responsable!.IdUsuario;
         proyecto.LugarReunion = nuevoLugar;
         proyecto.FechaInicio = modelo.FechaInicio.Date;
         proyecto.FechaFin = modelo.FechaFin.Date;
@@ -338,6 +338,7 @@ public class ProyectosController(
         proyecto.EstadoAprobacion = EstadoAprobacion.Pendiente;
         proyecto.ComentarioAprobacion = null;
         proyecto.FechaRevision = null;
+        proyecto.IdUsuarioRevisor = null;
         proyecto.FechaSolicitud = DateTime.UtcNow;
 
         await dbContext.SaveChangesAsync();
@@ -357,29 +358,69 @@ public class ProyectosController(
             return Challenge();
         }
 
-        if (!await dbContext.Proyectos.AsNoTracking().AnyAsync(proyecto =>
-                proyecto.IdProyecto == id && proyecto.Activo && proyecto.EstadoAprobacion == EstadoAprobacion.Aprobado))
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var proyecto = await dbContext.Proyectos
+            .FirstOrDefaultAsync(item =>
+                item.IdProyecto == id &&
+                item.Activo &&
+                item.EstadoAprobacion == EstadoAprobacion.Aprobado);
+        if (proyecto is null)
         {
             return NotFound();
         }
 
-        var yaRegistrado = await dbContext.RegistrosProyectos
-            .AsNoTracking()
-            .AnyAsync(registro => registro.IdUsuario == usuarioId && registro.IdProyecto == id);
-        if (!yaRegistrado)
+        if (proyecto.IdUsuarioCreador == usuarioId || proyecto.IdUsuarioOrganizador == usuarioId)
         {
-            dbContext.RegistrosProyectos.Add(new RegistroProyecto
+            TempData["Mensaje"] = "No puedes solicitar colaborar en un proyecto que creaste o supervisas.";
+            return RedirectToAction(nameof(Detalle), new { id });
+        }
+
+        var registro = await dbContext.RegistrosProyectos
+            .FirstOrDefaultAsync(item => item.IdUsuario == usuarioId && item.IdProyecto == id);
+        var nuevaSolicitud = false;
+        if (registro is null)
+        {
+            registro = new RegistroProyecto
             {
                 IdUsuario = usuarioId,
                 IdProyecto = id,
-                FechaRegistro = DateTime.UtcNow
-            });
+                FechaRegistro = DateTime.UtcNow,
+                Estado = EstadoRegistroProyecto.Pendiente
+            };
+            dbContext.RegistrosProyectos.Add(registro);
+            nuevaSolicitud = true;
+        }
+        else if (registro.Estado == EstadoRegistroProyecto.Rechazado)
+        {
+            registro.Estado = EstadoRegistroProyecto.Pendiente;
+            registro.IdUsuarioRevisor = null;
+            registro.FechaRevision = null;
+            registro.FechaRegistro = DateTime.UtcNow;
+            nuevaSolicitud = true;
+        }
+
+        if (nuevaSolicitud)
+        {
+            if (proyecto.IdUsuarioOrganizador is int idOrganizador &&
+                idOrganizador != usuarioId)
+            {
+                dbContext.Notificaciones.Add(new Notificacion
+                {
+                    IdUsuario = idOrganizador,
+                    IdProyecto = id,
+                    Titulo = $"Solicitud para colaborar en «{proyecto.Nombre}»",
+                    Mensaje = $"{User.Identity?.Name ?? "Un usuario"} solicita unirse como colaborador.",
+                    FechaCreacion = DateTime.UtcNow
+                });
+            }
+
             await dbContext.SaveChangesAsync();
-            TempData["Mensaje"] = "Te has sumado exitosamente a este proyecto académico.";
+            await transaction.CommitAsync();
+            TempData["Mensaje"] = "Tu solicitud para colaborar se envió al organizador.";
         }
         else
         {
-            TempData["Mensaje"] = "Ya estás registrado en este proyecto.";
+            TempData["Mensaje"] = "Ya estás aceptado o tienes una solicitud pendiente para este proyecto.";
         }
 
         if (Url.IsLocalUrl(returnUrl))
@@ -387,6 +428,87 @@ public class ProyectosController(
             return Redirect(returnUrl!);
         }
 
+        return RedirectToAction(nameof(Detalle), new { id });
+    }
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResolverSolicitudColaborador(
+        int id,
+        int idRegistroProyecto,
+        bool aceptar,
+        string? comentario)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
+        {
+            return Challenge();
+        }
+
+        var registro = await dbContext.RegistrosProyectos
+            .Include(item => item.Proyecto)
+            .FirstOrDefaultAsync(item =>
+                item.IdRegistroProyecto == idRegistroProyecto &&
+                item.IdProyecto == id);
+        if (registro is null)
+        {
+            return NotFound();
+        }
+
+        var usuarioEsAdmin = User.IsInRole("Administrador") || User.IsInRole("Admin");
+        var usuarioEsOrganizadorActivo = await dbContext.Usuarios
+            .AsNoTracking()
+            .Include(usuario => usuario.Rol)
+            .AnyAsync(usuario =>
+                usuario.IdUsuario == usuarioId &&
+                usuario.Activo &&
+                (usuario.IdRol == 2 || usuario.Rol.Nombre.Contains("Organizador")));
+        if (!usuarioEsAdmin &&
+            (!usuarioEsOrganizadorActivo || registro.Proyecto.IdUsuarioOrganizador != usuarioId))
+        {
+            return Forbid();
+        }
+
+        if (registro.Estado != EstadoRegistroProyecto.Pendiente)
+        {
+            TempData["Mensaje"] = "La solicitud de colaboración ya fue revisada.";
+            return RedirectToAction(nameof(Detalle), new { id });
+        }
+
+        if (!registro.Proyecto.Activo ||
+            registro.Proyecto.EstadoAprobacion != EstadoAprobacion.Aprobado)
+        {
+            TempData["Mensaje"] = "Solo puedes revisar solicitudes de proyectos activos y aprobados.";
+            return RedirectToAction(nameof(Detalle), new { id });
+        }
+
+        if (!aceptar && string.IsNullOrWhiteSpace(comentario))
+        {
+            TempData["Mensaje"] = "Indica el motivo para rechazar la solicitud.";
+            return RedirectToAction(nameof(Detalle), new { id });
+        }
+        if (comentario?.Length > 1000)
+        {
+            TempData["Mensaje"] = "El motivo no puede superar los 1000 caracteres.";
+            return RedirectToAction(nameof(Detalle), new { id });
+        }
+
+        registro.Estado = aceptar ? EstadoRegistroProyecto.Aceptado : EstadoRegistroProyecto.Rechazado;
+        registro.IdUsuarioRevisor = usuarioId;
+        registro.FechaRevision = DateTime.UtcNow;
+        dbContext.Notificaciones.Add(new Notificacion
+        {
+            IdUsuario = registro.IdUsuario,
+            IdProyecto = id,
+            Titulo = $"Solicitud de colaboración { (aceptar ? "aceptada" : "rechazada") }",
+            Mensaje = aceptar
+                ? $"El organizador aceptó tu solicitud para colaborar en «{registro.Proyecto.Nombre}»."
+                : $"El organizador rechazó tu solicitud para colaborar en «{registro.Proyecto.Nombre}». Motivo: {comentario!.Trim()}",
+            FechaCreacion = DateTime.UtcNow
+        });
+
+        await dbContext.SaveChangesAsync();
+        TempData["Mensaje"] = aceptar ? "La solicitud de colaboración fue aceptada." : "La solicitud de colaboración fue rechazada.";
         return RedirectToAction(nameof(Detalle), new { id });
     }
 
@@ -453,12 +575,13 @@ public class ProyectosController(
         proyecto.Activo = false;
         proyecto.MotivoEliminacion = motivoLimpio;
         proyecto.FechaEliminacion = DateTime.UtcNow;
+        proyecto.IdUsuarioEliminador = usuarioId;
         var fechaNotificacion = DateTime.UtcNow;
-        if (proyecto.IdUsuario != usuarioId)
+        if (proyecto.IdUsuarioCreador != usuarioId)
         {
             dbContext.Notificaciones.Add(new Notificacion
             {
-                IdUsuario = proyecto.IdUsuario,
+                IdUsuario = proyecto.IdUsuarioCreador,
                 IdProyecto = proyecto.IdProyecto,
                 Titulo = $"El proyecto «{proyecto.Nombre}» fue eliminado",
                 Mensaje = $"El organizador eliminó este proyecto. Motivo: {motivoLimpio}",
@@ -468,10 +591,12 @@ public class ProyectosController(
 
         var asistentesIds = await dbContext.RegistrosProyectos
             .AsNoTracking()
-            .Where(registro => registro.IdProyecto == proyecto.IdProyecto)
+            .Where(registro =>
+                registro.IdProyecto == proyecto.IdProyecto &&
+                registro.Estado == EstadoRegistroProyecto.Aceptado)
             .Select(registro => registro.IdUsuario)
             .Distinct()
-            .Where(asistenteId => asistenteId != proyecto.IdUsuario && asistenteId != usuarioId)
+            .Where(asistenteId => asistenteId != proyecto.IdUsuarioCreador && asistenteId != usuarioId)
             .ToListAsync();
 
         foreach (var asistenteId in asistentesIds)
@@ -494,8 +619,8 @@ public class ProyectosController(
 
     private async Task<bool> PuedeEditarProyectoAsync(Proyecto proyecto, int usuarioId)
     {
-        if (proyecto.IdUsuario == usuarioId ||
-            proyecto.IdUsuarioResponsable == usuarioId ||
+        if (proyecto.IdUsuarioCreador == usuarioId ||
+            proyecto.IdUsuarioOrganizador == usuarioId ||
             User.IsInRole("Administrador") ||
             User.IsInRole("Admin"))
         {
@@ -517,12 +642,7 @@ public class ProyectosController(
             return true;
         }
 
-        var nombreCompleto = string.Join(
-            " ",
-            new[] { usuario.Nombres, usuario.ApellidoPaterno, usuario.ApellidoMaterno }
-                .Where(s => !string.IsNullOrWhiteSpace(s)));
-
-        return string.Equals(proyecto.NombreResponsable, nombreCompleto, StringComparison.OrdinalIgnoreCase);
+        return false;
     }
 
     private void ValidarImagenProyecto(IFormFile? archivo, string nombreCampo)

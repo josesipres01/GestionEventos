@@ -18,6 +18,14 @@ public class CrearEventoViewModel
     [Display(Name = "Fecha y hora")]
     public DateTime FechaHora { get; set; } = DateTime.Now.AddDays(7).Date.AddHours(10);
 
+    [Required(ErrorMessage = "La fecha y hora de fin son obligatorias.")]
+    [Display(Name = "Fecha y hora de fin")]
+    public DateTime FechaFin { get; set; } = DateTime.Now.AddDays(7).Date.AddHours(12);
+
+    [Range(1, int.MaxValue, ErrorMessage = "El cupo debe ser mayor que cero.")]
+    [Display(Name = "Cupo máximo (opcional)")]
+    public int? Cupo { get; set; }
+
     [Required(ErrorMessage = "El lugar es obligatorio.")]
     [StringLength(150)]
     [Display(Name = "Lugar donde se realizará")]

@@ -35,11 +35,11 @@
 
             <div class="row g-3 mb-3">
                 <div class="col-md-6">
-                    <label asp-for="IdUsuarioResponsable" class="nexo-label"></label>
-                    <select asp-for="IdUsuarioResponsable" asp-items="ViewBag.Responsables" class="nexo-select">
+                    <label asp-for="IdUsuarioOrganizador" class="nexo-label"></label>
+                    <select asp-for="IdUsuarioOrganizador" asp-items="ViewBag.Responsables" class="nexo-select">
                         <option value="">Selecciona un organizador responsable</option>
                     </select>
-                    <span asp-validation-for="IdUsuarioResponsable" class="text-danger small"></span>
+                    <span asp-validation-for="IdUsuarioOrganizador" class="text-danger small"></span>
                 </div>
 
                 <div class="col-md-6">
@@ -117,4 +117,3 @@
         });
     </script>
 }
-

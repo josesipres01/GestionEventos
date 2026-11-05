@@ -255,9 +255,12 @@
                 var imagenUrl = !string.IsNullOrWhiteSpace(proyecto.ImagenUrl)
                     ? proyecto.ImagenUrl
                     : imagenesProyectos[(indice - 1) % imagenesProyectos.Length];
-                var iniciales = ObtenerIniciales(proyecto.NombreResponsable);
+                var nombreOrganizador = proyecto.Organizador is not null
+                    ? $"{proyecto.Organizador.Nombres} {proyecto.Organizador.ApellidoPaterno}".Trim()
+                    : "Organizador pendiente";
+                var iniciales = ObtenerIniciales(nombreOrganizador);
                 var carrera = proyecto.Carrera?.Nombre ?? "Proyecto UNISON";
-                var palabrasClave = $"{proyecto.Nombre} {proyecto.Descripcion} {proyecto.LugarReunion} {proyecto.NombreResponsable} {carrera} proyecto";
+                var palabrasClave = $"{proyecto.Nombre} {proyecto.Descripcion} {proyecto.LugarReunion} {nombreOrganizador} {carrera} proyecto";
                 indice++;
 
                 <article class="nexo-card"
@@ -265,7 +268,10 @@
                          data-nexo-type="proyecto"
                          data-nexo-keywords="@palabrasClave">
                     <a asp-controller="Proyectos" asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="nexo-card-media d-block text-decoration-none">
-                        <span class="nexo-badge-type badge-proyecto">PROYECTO · INSCRITO</span>
+                        <span class="nexo-badge-type badge-proyecto">
+                            PROYECTO · @(regProyecto.Estado == EstadoRegistroProyecto.Aceptado ? "ACEPTADO" :
+                                regProyecto.Estado == EstadoRegistroProyecto.Pendiente ? "PENDIENTE" : "RECHAZADO")
+                        </span>
                         <img src="@imagenUrl" alt="@proyecto.Nombre" loading="lazy" />
                         <span class="nexo-card-index">@numeroTexto</span>
                     </a>
@@ -301,7 +307,7 @@
                         <div class="nexo-card-footer">
                             <div class="nexo-author">
                                 <span class="nexo-avatar">@iniciales</span>
-                                <span class="nexo-author-name">@proyecto.NombreResponsable</span>
+                                <span class="nexo-author-name">@nombreOrganizador</span>
                             </div>
 
                             <div class="d-flex align-items-center gap-2">

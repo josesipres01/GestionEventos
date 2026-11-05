@@ -86,9 +86,14 @@
 
             <div class="d-flex flex-wrap align-items-center gap-4 text-white-50 small">
                 <span><strong>Fecha y hora:</strong> <span class="text-white">@Model.FechaHora.ToString("dd 'de' MMMM 'de' yyyy · HH:mm")</span></span>
+                <span><strong>Finaliza:</strong> <span class="text-white">@Model.FechaFin.ToString("dd 'de' MMMM 'de' yyyy · HH:mm")</span></span>
                 <span><strong>Lugar:</strong> <span class="text-white">@Model.Lugar</span></span>
                 <span><strong>Organiza:</strong> <span class="text-white">@nombreOrganizador</span></span>
                 <span><strong>Personas registradas:</strong> <span class="text-white">@registros.Count</span></span>
+                @if (Model.Cupo.HasValue)
+                {
+                    <span><strong>Cupo:</strong> <span class="text-white">@registros.Count / @Model.Cupo</span></span>
+                }
             </div>
         </div>
     </header>
@@ -207,6 +212,11 @@
                 <dd class="fw-semibold mb-0">
                     @registros.Count @(registros.Count == 1 ? "persona registrada" : "personas registradas")
                 </dd>
+                @if (Model.Cupo.HasValue)
+                {
+                    <dt class="text-muted small text-uppercase mt-3">Cupo máximo</dt>
+                    <dd class="fw-semibold mb-0">@registros.Count de @Model.Cupo</dd>
+                }
             </dl>
 
             @if (Model.Activo && Model.EstadoAprobacion == EstadoAprobacion.Aprobado)
@@ -231,16 +241,23 @@
                         }
                         else
                         {
-                            <form asp-controller="Eventos"
+                            if (Model.Cupo.HasValue && registros.Count >= Model.Cupo.Value)
+                            {
+                                <div class="alert alert-secondary mb-0">El evento alcanzó su cupo máximo.</div>
+                            }
+                            else
+                            {
+                                <form asp-controller="Eventos"
                                   asp-action="RegistrarInteres"
                                   asp-route-id="@Model.IdEvento"
                                   method="post">
-                                <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
-                                <button type="submit" class="btn-nexo-primary w-100 justify-content-center py-2">
-                                    <span>Registrarme al evento</span>
-                                    <span aria-hidden="true">→</span>
-                                </button>
-                            </form>
+                                    <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                                    <button type="submit" class="btn-nexo-primary w-100 justify-content-center py-2">
+                                        <span>Registrarme al evento</span>
+                                        <span aria-hidden="true">→</span>
+                                    </button>
+                                </form>
+                            }
                         }
                     }
                     else

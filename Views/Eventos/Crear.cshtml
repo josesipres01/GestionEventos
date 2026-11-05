@@ -39,9 +39,22 @@
                 </div>
 
                 <div class="col-md-6">
+                    <label asp-for="FechaFin" class="nexo-label"></label>
+                    <input asp-for="FechaFin" type="datetime-local" class="nexo-input" value="@Model.FechaFin.ToString("yyyy-MM-ddTHH:mm")" />
+                    <span asp-validation-for="FechaFin" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
                     <label asp-for="Lugar" class="nexo-label"></label>
                     <input asp-for="Lugar" class="nexo-input" placeholder="Ej. Auditorio Norte / Patio Central" />
                     <span asp-validation-for="Lugar" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label asp-for="Cupo" class="nexo-label"></label>
+                    <input asp-for="Cupo" type="number" min="1" class="nexo-input" placeholder="Sin límite" />
+                    <span asp-validation-for="Cupo" class="text-danger small"></span>
+                    <div class="form-text text-muted small mt-1">Déjalo vacío si no hay límite de asistencia.</div>
                 </div>
             </div>
 

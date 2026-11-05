@@ -147,10 +147,13 @@
                     <tbody>
                         @foreach (var proyecto in proyectos)
                         {
-                            var autor = proyecto.Usuario is not null
-                                ? $"{proyecto.Usuario.Nombres} {proyecto.Usuario.ApellidoPaterno}".Trim()
+                            var autor = proyecto.Creador is not null
+                                ? $"{proyecto.Creador.Nombres} {proyecto.Creador.ApellidoPaterno}".Trim()
                                 : "Estudiante";
-                            var totalColab = proyecto.Registros?.Count ?? 0;
+                            var totalColab = proyecto.Registros?.Count(r => r.Estado == EstadoRegistroProyecto.Aceptado) ?? 0;
+                            var organizador = proyecto.Organizador is not null
+                                ? $"{proyecto.Organizador.Nombres} {proyecto.Organizador.ApellidoPaterno}".Trim()
+                                : "Organizador pendiente";
 
                             <tr>
                                 <td class="fw-bold">
@@ -167,7 +170,7 @@
                                     }
                                 </td>
                                 <td>@(proyecto.Carrera?.Nombre ?? "General")</td>
-                                <td>@proyecto.NombreResponsable</td>
+                                <td>@organizador</td>
                                 <td>@autor</td>
                                 <td>@totalColab</td>
                                 <td class="text-end">

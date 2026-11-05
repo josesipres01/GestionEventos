@@ -5,6 +5,7 @@
     var proyectos = ViewBag.Proyectos as List<Proyecto> ?? new List<Proyecto>();
     var eventosRegistradosIds = ViewBag.EventosRegistradosIds as HashSet<int> ?? new HashSet<int>();
     var proyectosRegistradosIds = ViewBag.ProyectosRegistradosIds as HashSet<int> ?? new HashSet<int>();
+    var proyectosPendientesIds = ViewBag.ProyectosPendientesIds as HashSet<int> ?? new HashSet<int>();
     var notificacionesNoLeidas = ViewBag.NotificacionesNoLeidas as List<Notificacion> ?? new List<Notificacion>();
     var usuarioActualId = ViewBag.UsuarioActualId as int? ?? 0;
     var esAdmin = User.IsInRole("Administrador") || User.IsInRole("Admin");
@@ -188,6 +189,7 @@
                 var inicialesOrg = ObtenerIniciales(nombreOrganizador);
                 var estaRegistrado = eventosRegistradosIds.Contains(evento.IdEvento);
                 var totalInscritosEvento = evento.Registros?.Count ?? 0;
+                var cupoCompleto = evento.Cupo.HasValue && totalInscritosEvento >= evento.Cupo.Value;
                 var palabrasClave = $"{evento.Nombre} {evento.Descripcion} {evento.Lugar} {nombreOrganizador} evento";
                 indice++;
 
@@ -218,8 +220,14 @@
                                     <line x1="8" y1="2" x2="8" y2="6"></line>
                                     <line x1="3" y1="10" x2="21" y2="10"></line>
                                 </svg>
-                                <span>@evento.FechaHora.ToString("dd MMM · HH:mm").ToUpperInvariant()</span>
+                                <span>@evento.FechaHora.ToString("dd MMM · HH:mm").ToUpperInvariant() – @evento.FechaFin.ToString("dd MMM · HH:mm").ToUpperInvariant()</span>
                             </span>
+                            @if (evento.Cupo.HasValue)
+                            {
+                                <span class="nexo-meta-item" title="Cupo máximo">
+                                    <span>Cupo @totalInscritosEvento/@evento.Cupo</span>
+                                </span>
+                            }
 
                             <span class="nexo-meta-item" title="Lugar">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -263,6 +271,10 @@
                                     {
                                         <span class="btn-nexo-registered">✓ Inscrito</span>
                                     }
+                                    else if (cupoCompleto)
+                                    {
+                                        <span class="btn-nexo-registered">Cupo completo</span>
+                                    }
                                     else
                                     {
                                         <form asp-controller="Eventos" asp-action="RegistrarInteres" asp-route-id="@evento.IdEvento" method="post" class="m-0">
@@ -293,12 +305,17 @@
                 var imagenUrl = !string.IsNullOrWhiteSpace(proyecto.ImagenUrl)
                     ? proyecto.ImagenUrl
                     : imagenesProyectos[(indice - 1) % imagenesProyectos.Length];
-                var inicialesResp = ObtenerIniciales(proyecto.NombreResponsable);
+                var nombreOrganizadorProyecto = proyecto.Organizador is not null
+                    ? $"{proyecto.Organizador.Nombres} {proyecto.Organizador.ApellidoPaterno}".Trim()
+                    : "Organizador pendiente";
+                var inicialesResp = ObtenerIniciales(nombreOrganizadorProyecto);
                 var nombreCarrera = proyecto.Carrera?.Nombre ?? "Proyecto universitario";
                 var estaRegistradoProyecto = proyectosRegistradosIds.Contains(proyecto.IdProyecto);
-                var puedeEditarProyecto = esAdmin || (usuarioActualId > 0 && proyecto.IdUsuario == usuarioActualId);
-                var totalColaboradores = proyecto.Registros?.Count ?? 0;
-                var palabrasClave = $"{proyecto.Nombre} {proyecto.Descripcion} {proyecto.NombreResponsable} {nombreCarrera} proyecto";
+                var tieneSolicitudPendiente = proyectosPendientesIds.Contains(proyecto.IdProyecto);
+                var puedeEditarProyecto = esAdmin || (usuarioActualId > 0 &&
+                    (proyecto.IdUsuarioCreador == usuarioActualId || proyecto.IdUsuarioOrganizador == usuarioActualId));
+                var totalColaboradores = proyecto.Registros?.Count(r => r.Estado == EstadoRegistroProyecto.Aceptado) ?? 0;
+                var palabrasClave = $"{proyecto.Nombre} {proyecto.Descripcion} {nombreOrganizadorProyecto} {nombreCarrera} proyecto";
                 indice++;
 
                 <article class="nexo-card"
@@ -351,9 +368,9 @@
                         </div>
 
                         <div class="nexo-card-footer">
-                            <div class="nexo-author" title="Responsable: @proyecto.NombreResponsable">
+                            <div class="nexo-author" title="Organizador: @nombreOrganizadorProyecto">
                                 <span class="nexo-avatar">@inicialesResp</span>
-                                <span class="nexo-author-name">@proyecto.NombreResponsable</span>
+                                <span class="nexo-author-name">@nombreOrganizadorProyecto</span>
                             </div>
 
                             <div class="d-flex align-items-center gap-2">
@@ -372,6 +389,10 @@
                                     if (estaRegistradoProyecto)
                                     {
                                         <span class="btn-nexo-registered">✓ Inscrito</span>
+                                    }
+                                    else if (tieneSolicitudPendiente)
+                                    {
+                                        <span class="btn-nexo-registered">Solicitud pendiente</span>
                                     }
                                     else
                                     {

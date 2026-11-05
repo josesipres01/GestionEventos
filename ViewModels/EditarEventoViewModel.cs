@@ -20,6 +20,14 @@ public class EditarEventoViewModel
     [Display(Name = "Fecha y hora")]
     public DateTime FechaHora { get; set; }
 
+    [Required(ErrorMessage = "La fecha y hora de fin son obligatorias.")]
+    [Display(Name = "Fecha y hora de fin")]
+    public DateTime FechaFin { get; set; }
+
+    [Range(1, int.MaxValue, ErrorMessage = "El cupo debe ser mayor que cero.")]
+    [Display(Name = "Cupo máximo (opcional)")]
+    public int? Cupo { get; set; }
+
     [Required(ErrorMessage = "El lugar es obligatorio.")]
     [StringLength(150)]
     [Display(Name = "Lugar donde se realizará")]

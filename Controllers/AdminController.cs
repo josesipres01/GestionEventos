@@ -274,7 +274,8 @@ public class AdminController(
         var proyectos = await dbContext.Proyectos
             .AsNoTrackingWithIdentityResolution()
             .Include(p => p.Carrera)
-            .Include(p => p.Usuario)
+            .Include(p => p.Creador)
+            .Include(p => p.Organizador)
             .Include(p => p.Registros)
             .OrderByDescending(p => p.FechaPublicacion)
             .ToListAsync();
@@ -314,8 +315,12 @@ public class AdminController(
         evento.Activo = false;
         evento.MotivoEliminacion = motivoLimpio;
         evento.FechaEliminacion = DateTime.UtcNow;
-        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var adminId) ||
-            evento.IdUsuarioSolicitante != adminId)
+        var tieneAdminId = int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var adminId);
+        if (tieneAdminId)
+        {
+            evento.IdUsuarioEliminador = adminId;
+        }
+        if (!tieneAdminId || evento.IdUsuarioSolicitante != adminId)
         {
             dbContext.Notificaciones.Add(new Notificacion
             {
@@ -365,12 +370,16 @@ public class AdminController(
         proyecto.MotivoEliminacion = motivoLimpio;
         proyecto.FechaEliminacion = DateTime.UtcNow;
         var fechaNotificacion = DateTime.UtcNow;
-        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var adminId) ||
-            proyecto.IdUsuario != adminId)
+        var tieneAdminId = int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var adminId);
+        if (tieneAdminId)
+        {
+            proyecto.IdUsuarioEliminador = adminId;
+        }
+        if (!tieneAdminId || proyecto.IdUsuarioCreador != adminId)
         {
             dbContext.Notificaciones.Add(new Notificacion
             {
-                IdUsuario = proyecto.IdUsuario,
+                IdUsuario = proyecto.IdUsuarioCreador,
                 IdProyecto = proyecto.IdProyecto,
                 Titulo = $"El proyecto «{proyecto.Nombre}» fue eliminado",
                 Mensaje = $"El administrador eliminó este proyecto. Motivo: {motivoLimpio}",
@@ -380,10 +389,13 @@ public class AdminController(
 
         var asistentesIds = await dbContext.RegistrosProyectos
             .AsNoTracking()
-            .Where(registro => registro.IdProyecto == proyecto.IdProyecto)
+            .Where(registro =>
+                registro.IdProyecto == proyecto.IdProyecto &&
+                registro.Estado == EstadoRegistroProyecto.Aceptado)
             .Select(registro => registro.IdUsuario)
             .Distinct()
-            .Where(asistenteId => asistenteId != proyecto.IdUsuario && asistenteId != adminId)
+            .Where(asistenteId => asistenteId != proyecto.IdUsuarioCreador &&
+                (!tieneAdminId || asistenteId != adminId))
             .ToListAsync();
 
         foreach (var asistenteId in asistentesIds)
@@ -430,6 +442,10 @@ public class AdminController(
 
             evento.ReactivacionSolicitada = false;
             evento.FechaSolicitudReactivacion = null;
+            if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var revisorEventoId))
+            {
+                evento.IdUsuarioRevisor = revisorEventoId;
+            }
             if (aprobar)
             {
                 evento.Activo = true;
@@ -462,6 +478,10 @@ public class AdminController(
 
             proyecto.ReactivacionSolicitada = false;
             proyecto.FechaSolicitudReactivacion = null;
+            if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var revisorProyectoId))
+            {
+                proyecto.IdUsuarioRevisor = revisorProyectoId;
+            }
             if (aprobar)
             {
                 proyecto.Activo = true;
@@ -469,7 +489,7 @@ public class AdminController(
 
             dbContext.Notificaciones.Add(new Notificacion
             {
-                IdUsuario = proyecto.IdUsuario,
+                IdUsuario = proyecto.IdUsuarioCreador,
                 IdProyecto = proyecto.IdProyecto,
                 Titulo = aprobar ? "Proyecto reactivado" : "Solicitud de reactivación rechazada",
                 Mensaje = aprobar

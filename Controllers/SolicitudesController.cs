@@ -30,11 +30,11 @@ public class SolicitudesController(GestionEventosDbContext dbContext) : Controll
 
         var proyectos = await dbContext.Proyectos
             .AsNoTracking()
-            .Include(proyecto => proyecto.OrganizadorResponsable)
-            .Include(proyecto => proyecto.Usuario)
+            .Include(proyecto => proyecto.Organizador)
+            .Include(proyecto => proyecto.Creador)
             .Where(proyecto =>
-                proyecto.IdUsuario == usuarioId ||
-                proyecto.IdUsuarioResponsable == usuarioId)
+                proyecto.IdUsuarioCreador == usuarioId ||
+                proyecto.IdUsuarioOrganizador == usuarioId)
             .ToListAsync();
 
         var puedeRevisarSolicitudes = await EsOrganizadorActivoAsync(usuarioId);
@@ -57,15 +57,15 @@ public class SolicitudesController(GestionEventosDbContext dbContext) : Controll
                     UrlEdicion = Url.Action("Editar", "Eventos", new { id = evento.IdEvento })
                 })
                 .Concat(proyectos
-                    .Where(proyecto => proyecto.IdUsuario == usuarioId && proyecto.Activo)
+                    .Where(proyecto => proyecto.IdUsuarioCreador == usuarioId && proyecto.Activo)
                     .Select(proyecto => new SolicitudPublicacionViewModel
                     {
                         Id = proyecto.IdProyecto,
                         Tipo = "Proyecto",
                         Nombre = proyecto.Nombre,
-                        Organizador = proyecto.OrganizadorResponsable is null
-                            ? proyecto.NombreResponsable
-                            : NombreCompleto(proyecto.OrganizadorResponsable),
+                        Organizador = proyecto.Organizador is null
+                            ? "Sin organizador asignado"
+                            : NombreCompleto(proyecto.Organizador),
                         Estado = proyecto.EstadoAprobacion,
                         FechaEnvio = proyecto.FechaSolicitud,
                         FechaRevision = proyecto.FechaRevision,
@@ -100,16 +100,16 @@ public class SolicitudesController(GestionEventosDbContext dbContext) : Controll
                         Id = proyecto.IdProyecto,
                         Tipo = "Proyecto",
                         Nombre = proyecto.Nombre,
-                        Organizador = proyecto.OrganizadorResponsable is null
-                            ? proyecto.NombreResponsable
-                            : NombreCompleto(proyecto.OrganizadorResponsable),
+                        Organizador = proyecto.Organizador is null
+                            ? "Sin organizador asignado"
+                            : NombreCompleto(proyecto.Organizador),
                         Estado = proyecto.EstadoAprobacion,
                         FechaEnvio = proyecto.FechaPublicacion,
                         ReactivacionSolicitada = proyecto.ReactivacionSolicitada,
                         PuedeSolicitarReactivacion =
                             puedeRevisarSolicitudes &&
-                            proyecto.IdUsuarioResponsable == usuarioId &&
-                            proyecto.IdUsuario != usuarioId,
+                            proyecto.IdUsuarioOrganizador == usuarioId &&
+                            proyecto.IdUsuarioCreador != usuarioId,
                         MotivoEliminacion = proyecto.MotivoEliminacion,
                         UrlDetalle = Url.Action("Detalle", "Proyectos", new { id = proyecto.IdProyecto })
                     }))
@@ -133,7 +133,7 @@ public class SolicitudesController(GestionEventosDbContext dbContext) : Controll
                 })
                 .Concat(proyectos
                     .Where(proyecto =>
-                        proyecto.IdUsuarioResponsable == usuarioId &&
+                        proyecto.IdUsuarioOrganizador == usuarioId &&
                         proyecto.Activo &&
                         proyecto.EstadoAprobacion == EstadoAprobacion.Pendiente)
                     .Select(proyecto => new SolicitudPublicacionViewModel
@@ -141,7 +141,7 @@ public class SolicitudesController(GestionEventosDbContext dbContext) : Controll
                         Id = proyecto.IdProyecto,
                         Tipo = "Proyecto",
                         Nombre = proyecto.Nombre,
-                        Organizador = proyecto.Usuario.Nombres + " " + proyecto.Usuario.ApellidoPaterno,
+                        Organizador = proyecto.Creador.Nombres + " " + proyecto.Creador.ApellidoPaterno,
                         Estado = proyecto.EstadoAprobacion,
                         FechaEnvio = proyecto.FechaSolicitud,
                         UrlDetalle = Url.Action("Detalle", "Proyectos", new { id = proyecto.IdProyecto })
@@ -208,8 +208,8 @@ public class SolicitudesController(GestionEventosDbContext dbContext) : Controll
             }
 
             if (!await EsOrganizadorActivoAsync(usuarioId) ||
-                proyecto.IdUsuarioResponsable != usuarioId ||
-                proyecto.IdUsuario == usuarioId)
+                proyecto.IdUsuarioOrganizador != usuarioId ||
+                proyecto.IdUsuarioCreador == usuarioId)
             {
                 return Forbid();
             }
@@ -306,9 +306,11 @@ public class SolicitudesController(GestionEventosDbContext dbContext) : Controll
             return RedirectToAction(nameof(Index));
         }
 
-        evento.EstadoAprobacion = aprobar ? EstadoAprobacion.Aprobado : EstadoAprobacion.Rechazado;
-        evento.ComentarioAprobacion = comentario?.Trim();
-        evento.FechaRevision = DateTime.UtcNow;
+        evento.RegistrarRevision(
+            aprobar ? EstadoAprobacion.Aprobado : EstadoAprobacion.Rechazado,
+            comentario?.Trim(),
+            usuarioId,
+            DateTime.UtcNow);
         dbContext.Notificaciones.Add(new Notificacion
         {
             IdUsuario = evento.IdUsuarioSolicitante,
@@ -366,7 +368,7 @@ public class SolicitudesController(GestionEventosDbContext dbContext) : Controll
             return NotFound();
         }
 
-        if (proyecto.IdUsuarioResponsable != usuarioId || proyecto.IdUsuario == usuarioId)
+        if (proyecto.IdUsuarioOrganizador != usuarioId || proyecto.IdUsuarioCreador == usuarioId)
         {
             return Forbid();
         }
@@ -388,12 +390,14 @@ public class SolicitudesController(GestionEventosDbContext dbContext) : Controll
             return RedirectToAction(nameof(Index));
         }
 
-        proyecto.EstadoAprobacion = aprobar ? EstadoAprobacion.Aprobado : EstadoAprobacion.Rechazado;
-        proyecto.ComentarioAprobacion = comentario?.Trim();
-        proyecto.FechaRevision = DateTime.UtcNow;
+        proyecto.RegistrarRevision(
+            aprobar ? EstadoAprobacion.Aprobado : EstadoAprobacion.Rechazado,
+            comentario?.Trim(),
+            usuarioId,
+            DateTime.UtcNow);
         dbContext.Notificaciones.Add(new Notificacion
         {
-            IdUsuario = proyecto.IdUsuario,
+            IdUsuario = proyecto.IdUsuarioCreador,
             IdProyecto = proyecto.IdProyecto,
             Titulo = $"Solicitud de proyecto { (aprobar ? "aprobada" : "rechazada") }",
             Mensaje = aprobar
@@ -405,7 +409,9 @@ public class SolicitudesController(GestionEventosDbContext dbContext) : Controll
         {
             var colaboradores = await dbContext.RegistrosProyectos
                 .AsNoTracking()
-                .Where(registro => registro.IdProyecto == proyecto.IdProyecto)
+                .Where(registro =>
+                    registro.IdProyecto == proyecto.IdProyecto &&
+                    registro.Estado == EstadoRegistroProyecto.Aceptado)
                 .Select(registro => registro.IdUsuario)
                 .Distinct()
                 .ToListAsync();

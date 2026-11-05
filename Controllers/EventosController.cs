@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Data;
 using GestionEventos.Data;
 using GestionEventos.Models;
 using GestionEventos.ViewModels;
@@ -32,7 +33,8 @@ public class EventosController(
         var proyectos = await dbContext.Proyectos
             .AsNoTrackingWithIdentityResolution()
             .Include(proyecto => proyecto.Carrera)
-            .Include(proyecto => proyecto.Usuario)
+            .Include(proyecto => proyecto.Creador)
+            .Include(proyecto => proyecto.Organizador)
             .Include(proyecto => proyecto.Registros)
             .Where(proyecto => proyecto.Activo && proyecto.EstadoAprobacion == EstadoAprobacion.Aprobado)
             .OrderByDescending(proyecto => proyecto.FechaPublicacion)
@@ -40,6 +42,7 @@ public class EventosController(
 
         var eventosRegistradosIds = new HashSet<int>();
         var proyectosRegistradosIds = new HashSet<int>();
+        var proyectosPendientesIds = new HashSet<int>();
         var notificacionesNoLeidas = new List<Notificacion>();
         var usuarioActualId = 0;
 
@@ -52,7 +55,13 @@ public class EventosController(
                 .ToHashSet();
 
             proyectosRegistradosIds = proyectos
-                .Where(p => p.Registros.Any(r => r.IdUsuario == usuarioId))
+                .Where(p => p.Registros.Any(r =>
+                    r.IdUsuario == usuarioId && r.Estado == EstadoRegistroProyecto.Aceptado))
+                .Select(p => p.IdProyecto)
+                .ToHashSet();
+            proyectosPendientesIds = proyectos
+                .Where(p => p.Registros.Any(r =>
+                    r.IdUsuario == usuarioId && r.Estado == EstadoRegistroProyecto.Pendiente))
                 .Select(p => p.IdProyecto)
                 .ToHashSet();
 
@@ -67,6 +76,7 @@ public class EventosController(
         ViewBag.Proyectos = proyectos;
         ViewBag.EventosRegistradosIds = eventosRegistradosIds;
         ViewBag.ProyectosRegistradosIds = proyectosRegistradosIds;
+        ViewBag.ProyectosPendientesIds = proyectosPendientesIds;
         ViewBag.NotificacionesNoLeidas = notificacionesNoLeidas;
         ViewBag.UsuarioActualId = usuarioActualId;
 
@@ -118,7 +128,7 @@ public class EventosController(
 
             await dbContext.Notificaciones
                 .Where(n => n.IdUsuario == usuarioId && n.IdEvento == id)
-                .ExecuteDeleteAsync();
+                .ExecuteUpdateAsync(update => update.SetProperty(n => n.Leida, true));
         }
 
         ViewBag.EstaRegistrado = registroActual is not null;
@@ -149,19 +159,19 @@ public class EventosController(
             .Where(registro => registro.IdUsuario == usuarioId)
             .Include(registro => registro.Proyecto)
                 .ThenInclude(proyecto => proyecto.Carrera)
+            .Include(registro => registro.Proyecto)
+                .ThenInclude(proyecto => proyecto.Creador)
+            .Include(registro => registro.Proyecto)
+                .ThenInclude(proyecto => proyecto.Organizador)
             .OrderByDescending(registro => registro.FechaRegistro)
             .ToListAsync();
 
         var notificaciones = await dbContext.Notificaciones
             .AsNoTracking()
-            .Where(n => n.IdUsuario == usuarioId && !n.Leida)
+            .Where(n => n.IdUsuario == usuarioId)
             .OrderByDescending(n => n.FechaCreacion)
             .Take(20)
             .ToListAsync();
-
-        await dbContext.Notificaciones
-            .Where(n => n.IdUsuario == usuarioId)
-            .ExecuteDeleteAsync();
 
         ViewBag.RegistrosProyectos = registrosProyectos;
         ViewBag.Notificaciones = notificaciones;
@@ -181,7 +191,7 @@ public class EventosController(
 
         await dbContext.Notificaciones
             .Where(n => n.IdNotificacion == id && n.IdUsuario == usuarioId)
-            .ExecuteDeleteAsync();
+            .ExecuteUpdateAsync(update => update.SetProperty(n => n.Leida, true));
 
         if (Url.IsLocalUrl(returnUrl))
         {
@@ -202,10 +212,10 @@ public class EventosController(
         }
 
         await dbContext.Notificaciones
-            .Where(n => n.IdUsuario == usuarioId)
-            .ExecuteDeleteAsync();
+            .Where(n => n.IdUsuario == usuarioId && !n.Leida)
+            .ExecuteUpdateAsync(update => update.SetProperty(n => n.Leida, true));
 
-        TempData["Mensaje"] = "Se eliminaron los avisos de cambios.";
+        TempData["Mensaje"] = "Se marcaron los avisos como leídos.";
 
         if (Url.IsLocalUrl(returnUrl))
         {
@@ -240,11 +250,6 @@ public class EventosController(
         }
 
         var esAdmin = usuarioActual.IdRol == 3 || usuarioActual.Rol.Nombre.Contains("Admin");
-        var nombreCompleto = string.Join(
-            " ",
-            new[] { usuarioActual.Nombres, usuarioActual.ApellidoPaterno, usuarioActual.ApellidoMaterno }
-                .Where(s => !string.IsNullOrWhiteSpace(s)));
-
         var consultaEventos = dbContext.Eventos
             .AsNoTrackingWithIdentityResolution()
             .Include(e => e.Organizador)
@@ -264,14 +269,14 @@ public class EventosController(
         var proyectosResponsable = await dbContext.Proyectos
             .AsNoTrackingWithIdentityResolution()
             .Include(p => p.Carrera)
-            .Include(p => p.Usuario)
+            .Include(p => p.Creador)
+            .Include(p => p.Organizador)
             .Include(p => p.Registros)
             .Where(p => p.Activo)
             .Where(p =>
                 esAdmin ||
-                p.IdUsuarioResponsable == usuarioId ||
-                p.IdUsuario == usuarioId ||
-                (p.IdUsuarioResponsable == null && p.NombreResponsable == nombreCompleto))
+                p.IdUsuarioOrganizador == usuarioId ||
+                p.IdUsuarioCreador == usuarioId)
             .OrderByDescending(p => p.FechaPublicacion)
             .ToListAsync();
 
@@ -329,6 +334,11 @@ public class EventosController(
             return Challenge();
         }
 
+        if (modelo.FechaFin <= modelo.FechaHora)
+        {
+            ModelState.AddModelError(nameof(modelo.FechaFin), "La fecha de fin debe ser posterior al inicio.");
+        }
+
         var organizador = await dbContext.Usuarios
             .AsNoTracking()
             .Include(usuario => usuario.Rol)
@@ -362,6 +372,8 @@ public class EventosController(
             Nombre = modelo.Nombre.Trim(),
             Descripcion = modelo.Descripcion.Trim(),
             FechaHora = modelo.FechaHora,
+            FechaFin = modelo.FechaFin,
+            Cupo = modelo.Cupo,
             Lugar = modelo.Lugar.Trim(),
             ImagenUrl = imagenUrl,
             IdUsuarioOrganizador = organizador!.IdUsuario,
@@ -405,6 +417,8 @@ public class EventosController(
             Nombre = evento.Nombre,
             Descripcion = evento.Descripcion,
             FechaHora = evento.FechaHora,
+            FechaFin = evento.FechaFin,
+            Cupo = evento.Cupo,
             Lugar = evento.Lugar,
             ImagenUrlActual = evento.ImagenUrl
         });
@@ -418,6 +432,11 @@ public class EventosController(
         if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
         {
             return Challenge();
+        }
+
+        if (modelo.FechaFin <= modelo.FechaHora)
+        {
+            ModelState.AddModelError(nameof(modelo.FechaFin), "La fecha de fin debe ser posterior al inicio.");
         }
 
         ValidarImagenEvento(modelo.ImagenArchivo, nameof(modelo.ImagenArchivo));
@@ -444,6 +463,18 @@ public class EventosController(
         var nuevoNombre = modelo.Nombre.Trim();
         var nuevaDescripcion = modelo.Descripcion.Trim();
         var nuevoLugar = modelo.Lugar.Trim();
+        var registrosExistentes = await dbContext.Registros
+            .CountAsync(registro => registro.IdEvento == evento.IdEvento);
+        if (modelo.Cupo.HasValue && modelo.Cupo.Value < registrosExistentes)
+        {
+            ModelState.AddModelError(nameof(modelo.Cupo), "El cupo no puede ser menor que las inscripciones actuales.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            modelo.ImagenUrlActual = evento.ImagenUrl;
+            return View(modelo);
+        }
 
         if (modelo.ImagenArchivo is { Length: > 0 })
         {
@@ -454,10 +485,13 @@ public class EventosController(
         evento.Nombre = nuevoNombre;
         evento.Descripcion = nuevaDescripcion;
         evento.FechaHora = modelo.FechaHora;
+        evento.FechaFin = modelo.FechaFin;
+        evento.Cupo = modelo.Cupo;
         evento.Lugar = nuevoLugar;
         evento.EstadoAprobacion = EstadoAprobacion.Pendiente;
         evento.ComentarioAprobacion = null;
         evento.FechaRevision = null;
+        evento.IdUsuarioRevisor = null;
         evento.FechaSolicitud = DateTime.UtcNow;
 
         await dbContext.SaveChangesAsync();
@@ -512,6 +546,7 @@ public class EventosController(
         evento.Activo = false;
         evento.MotivoEliminacion = motivoLimpio;
         evento.FechaEliminacion = DateTime.UtcNow;
+        evento.IdUsuarioEliminador = usuarioId;
         if (evento.IdUsuarioSolicitante != usuarioId)
         {
             dbContext.Notificaciones.Add(new Notificacion
@@ -542,17 +577,28 @@ public class EventosController(
             return Challenge();
         }
 
-        if (!await dbContext.Eventos.AsNoTracking().AnyAsync(evento =>
-                evento.IdEvento == id && evento.Activo && evento.EstadoAprobacion == EstadoAprobacion.Aprobado))
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var evento = await dbContext.Eventos
+            .FirstOrDefaultAsync(item =>
+                item.IdEvento == id &&
+                item.Activo &&
+                item.EstadoAprobacion == EstadoAprobacion.Aprobado);
+        if (evento is null)
         {
             return NotFound();
         }
 
-        var yaRegistrado = await dbContext.Registros
-            .AsNoTracking()
-            .AnyAsync(registro => registro.IdUsuario == usuarioId && registro.IdEvento == id);
-        if (!yaRegistrado)
+        var registro = await dbContext.Registros
+            .FirstOrDefaultAsync(item => item.IdUsuario == usuarioId && item.IdEvento == id);
+        if (registro is null)
         {
+            if (evento.Cupo.HasValue &&
+                await dbContext.Registros.CountAsync(item => item.IdEvento == id) >= evento.Cupo.Value)
+            {
+                TempData["Mensaje"] = "El evento ya alcanzó su cupo máximo.";
+                return RedirectToAction(nameof(Detalle), new { id });
+            }
+
             dbContext.Registros.Add(new Registro
             {
                 IdUsuario = usuarioId,
@@ -560,6 +606,7 @@ public class EventosController(
                 FechaRegistro = DateTime.UtcNow
             });
             await dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
             TempData["Mensaje"] = "Tu asistencia quedó registrada en el evento.";
         }
         else

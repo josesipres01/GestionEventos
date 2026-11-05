@@ -119,13 +119,6 @@ public class CuentaController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CerrarSesion()
     {
-        if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
-        {
-            await dbContext.Notificaciones
-                .Where(n => n.IdUsuario == usuarioId && n.Leida)
-                .ExecuteDeleteAsync();
-        }
-
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return RedirectToAction(nameof(IniciarSesion));
     }

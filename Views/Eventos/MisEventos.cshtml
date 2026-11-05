@@ -191,10 +191,10 @@
                     var imagenUrl = !string.IsNullOrWhiteSpace(proyecto.ImagenUrl)
                         ? proyecto.ImagenUrl
                         : imagenesProyectos[(idxP - 1) % imagenesProyectos.Length];
-                    var autor = proyecto.Usuario is not null
-                        ? $"{proyecto.Usuario.Nombres} {proyecto.Usuario.ApellidoPaterno}".Trim()
+                    var autor = proyecto.Creador is not null
+                        ? $"{proyecto.Creador.Nombres} {proyecto.Creador.ApellidoPaterno}".Trim()
                         : "Estudiante UNISON";
-                    var totalColab = proyecto.Registros?.Count ?? 0;
+                    var totalColab = proyecto.Registros?.Count(r => r.Estado == EstadoRegistroProyecto.Aceptado) ?? 0;
                     idxP++;
 
                     <article class="nexo-card">

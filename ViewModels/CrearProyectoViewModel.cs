@@ -15,8 +15,8 @@ public class CrearProyectoViewModel
     public string Descripcion { get; set; } = string.Empty;
 
     [Range(1, int.MaxValue, ErrorMessage = "Selecciona un responsable.")]
-    [Display(Name = "Responsable")]
-    public int IdUsuarioResponsable { get; set; }
+    [Display(Name = "Organizador responsable")]
+    public int IdUsuarioOrganizador { get; set; }
 
     [Required(ErrorMessage = "Selecciona una carrera.")]
     [Display(Name = "Carrera")]
