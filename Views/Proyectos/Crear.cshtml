@@ -73,6 +73,12 @@
             </div>
 
             <div class="mb-4">
+                <label asp-for="Cupo" class="nexo-label"></label>
+                <input asp-for="Cupo" type="number" min="1" class="nexo-input" />
+                <span asp-validation-for="Cupo" class="text-danger small"></span>
+            </div>
+
+            <div class="mb-4">
                 <label asp-for="ImagenArchivo" class="nexo-label"></label>
                 <input asp-for="ImagenArchivo"
                        type="file"

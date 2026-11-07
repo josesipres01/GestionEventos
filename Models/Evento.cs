@@ -52,4 +52,5 @@ public class Evento : IAprobacionPublicacion
     public Usuario Solicitante { get; set; } = null!;
 
     public ICollection<Registro> Registros { get; set; } = new List<Registro>();
+    public ICollection<InteresEvento> Intereses { get; set; } = new List<InteresEvento>();
 }

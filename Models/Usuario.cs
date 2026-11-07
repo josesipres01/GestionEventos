@@ -41,5 +41,7 @@ public class Usuario
     public ICollection<Proyecto> Proyectos { get; set; } = new List<Proyecto>();
     public ICollection<Registro> Registros { get; set; } = new List<Registro>();
     public ICollection<RegistroProyecto> RegistrosProyectos { get; set; } = new List<RegistroProyecto>();
+    public ICollection<InteresEvento> InteresesEventos { get; set; } = new List<InteresEvento>();
+    public ICollection<InteresProyecto> InteresesProyectos { get; set; } = new List<InteresProyecto>();
     public ICollection<Notificacion> Notificaciones { get; set; } = new List<Notificacion>();
 }

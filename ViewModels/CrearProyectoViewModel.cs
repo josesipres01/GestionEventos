@@ -37,6 +37,11 @@ public class CrearProyectoViewModel
     [Display(Name = "Fecha de fin")]
     public DateTime FechaFin { get; set; } = DateTime.Today.AddMonths(1);
 
+    [Required(ErrorMessage = "Indica el cupo máximo de colaboradores.")]
+    [Range(1, int.MaxValue, ErrorMessage = "El cupo debe ser mayor que cero.")]
+    [Display(Name = "Cupo máximo de colaboradores")]
+    public int? Cupo { get; set; }
+
     [Display(Name = "Imagen de miniatura (opcional)")]
     public IFormFile? ImagenArchivo { get; set; }
 }

@@ -194,7 +194,7 @@
                     var autor = proyecto.Creador is not null
                         ? $"{proyecto.Creador.Nombres} {proyecto.Creador.ApellidoPaterno}".Trim()
                         : "Estudiante UNISON";
-                    var totalColab = proyecto.Registros?.Count(r => r.Estado == EstadoRegistroProyecto.Aceptado) ?? 0;
+                    var totalColab = proyecto.Registros?.Count(r => r.Estado != EstadoRegistroProyecto.Rechazado) ?? 0;
                     idxP++;
 
                     <article class="nexo-card">

@@ -3,7 +3,7 @@
     ViewData["Title"] = "Proyectos académicos";
     var proyectos = Model?.ToList() ?? new List<Proyecto>();
     var proyectosRegistradosIds = ViewBag.ProyectosRegistradosIds as HashSet<int> ?? new HashSet<int>();
-    var proyectosPendientesIds = ViewBag.ProyectosPendientesIds as HashSet<int> ?? new HashSet<int>();
+    var proyectosInteresadosIds = ViewBag.ProyectosInteresadosIds as HashSet<int> ?? new HashSet<int>();
     var usuarioActualId = ViewBag.UsuarioActualId as int? ?? 0;
     var esAdmin = User.IsInRole("Administrador") || User.IsInRole("Admin");
     var carrerasPresentes = proyectos
@@ -130,10 +130,11 @@
                     : "Organizador pendiente";
                 var iniciales = ObtenerIniciales(nombreOrganizador);
                 var estaRegistrado = proyectosRegistradosIds.Contains(proyecto.IdProyecto);
-                var tieneSolicitudPendiente = proyectosPendientesIds.Contains(proyecto.IdProyecto);
+                var estaInteresado = proyectosInteresadosIds.Contains(proyecto.IdProyecto);
                 var puedeEditar = esAdmin || (usuarioActualId > 0 &&
                     (proyecto.IdUsuarioCreador == usuarioActualId || proyecto.IdUsuarioOrganizador == usuarioActualId));
-                var totalColaboradores = proyecto.Registros?.Count(r => r.Estado == EstadoRegistroProyecto.Aceptado) ?? 0;
+                var totalColaboradores = proyecto.Registros?.Count(r => r.Estado != EstadoRegistroProyecto.Rechazado) ?? 0;
+                var cupoCompleto = proyecto.Cupo.HasValue && totalColaboradores >= proyecto.Cupo.Value;
                 var palabrasClave = $"{proyecto.Nombre} {proyecto.Descripcion} {nombreOrganizador} {nombreCarrera} {autor}";
                 indice++;
 
@@ -182,6 +183,12 @@
                                style="color: var(--nexo-teal);">
                                 <span>+ @totalColaboradores @(totalColaboradores == 1 ? "colaborador" : "colaboradores")</span>
                             </a>
+                            @if (proyecto.Cupo.HasValue)
+                            {
+                                <span class="nexo-meta-item" title="Cupo máximo de colaboradores">
+                                    <span>Cupo @totalColaboradores/@proyecto.Cupo</span>
+                                </span>
+                            }
                         </div>
 
                         <div class="nexo-card-footer">
@@ -191,6 +198,27 @@
                             </div>
 
                             <div class="d-flex align-items-center gap-2">
+                                @if (User.Identity?.IsAuthenticated == true)
+                                {
+                                    <form asp-action="AlternarInteres" asp-route-id="@proyecto.IdProyecto" method="post" class="m-0">
+                                        <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                                        <button type="submit"
+                                                class="btn-nexo-heart @(estaInteresado ? "is-interested" : "")"
+                                                aria-label="@(estaInteresado ? "Quitar de mis intereses" : "Marcar que me interesa")"
+                                                aria-pressed="@estaInteresado">
+                                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"></path></svg>
+                                            <span>@proyecto.Intereses.Count</span>
+                                        </button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <a asp-controller="Cuenta" asp-action="IniciarSesion" asp-route-returnUrl="@Context.Request.Path"
+                                       class="btn-nexo-heart" aria-label="Inicia sesión para marcar interés">
+                                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"></path></svg>
+                                        <span>@proyecto.Intereses.Count</span>
+                                    </a>
+                                }
                                 @if (puedeEditar)
                                 {
                                     <a asp-action="Editar"
@@ -206,16 +234,16 @@
                                     {
                                         <span class="btn-nexo-registered">✓ Inscrito</span>
                                     }
-                                    else if (tieneSolicitudPendiente)
+                                    else if (cupoCompleto)
                                     {
-                                        <span class="btn-nexo-registered">Solicitud pendiente</span>
+                                        <span class="btn-nexo-registered">Cupo completo</span>
                                     }
                                     else
                                     {
                                         <form asp-action="RegistrarInteres" asp-route-id="@proyecto.IdProyecto" method="post" class="m-0">
                                             <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
                                             <button type="submit" class="btn-nexo-interest">
-                                                <span>Sumarme</span>
+                                                <span>Inscribirme</span>
                                             </button>
                                         </form>
                                     }

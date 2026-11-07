@@ -150,7 +150,7 @@
                             var autor = proyecto.Creador is not null
                                 ? $"{proyecto.Creador.Nombres} {proyecto.Creador.ApellidoPaterno}".Trim()
                                 : "Estudiante";
-                            var totalColab = proyecto.Registros?.Count(r => r.Estado == EstadoRegistroProyecto.Aceptado) ?? 0;
+                            var totalColab = proyecto.Registros?.Count(r => r.Estado != EstadoRegistroProyecto.Rechazado) ?? 0;
                             var organizador = proyecto.Organizador is not null
                                 ? $"{proyecto.Organizador.Nombres} {proyecto.Organizador.ApellidoPaterno}".Trim()
                                 : "Organizador pendiente";

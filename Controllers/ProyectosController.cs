@@ -31,28 +31,30 @@ public class ProyectosController(
             .Include(proyecto => proyecto.Creador)
             .Include(proyecto => proyecto.Organizador)
             .Include(proyecto => proyecto.Registros)
+            .Include(proyecto => proyecto.Intereses)
             .Where(proyecto => proyecto.Activo && proyecto.EstadoAprobacion == EstadoAprobacion.Aprobado)
             .OrderByDescending(proyecto => proyecto.FechaPublicacion)
             .ToListAsync();
 
         var registradosIds = new HashSet<int>();
-        var pendientesIds = new HashSet<int>();
+        var interesadosIds = new HashSet<int>();
         var usuarioActualId = 0;
         if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
         {
             usuarioActualId = usuarioId;
             registradosIds = proyectos
-                .Where(p => p.Registros.Any(r => r.IdUsuario == usuarioId && r.Estado == EstadoRegistroProyecto.Aceptado))
+                .Where(p => p.Registros.Any(r =>
+                    r.IdUsuario == usuarioId && r.Estado != EstadoRegistroProyecto.Rechazado))
                 .Select(p => p.IdProyecto)
                 .ToHashSet();
-            pendientesIds = proyectos
-                .Where(p => p.Registros.Any(r => r.IdUsuario == usuarioId && r.Estado == EstadoRegistroProyecto.Pendiente))
+            interesadosIds = proyectos
+                .Where(p => p.Intereses.Any(interes => interes.IdUsuario == usuarioId))
                 .Select(p => p.IdProyecto)
                 .ToHashSet();
         }
 
         ViewBag.ProyectosRegistradosIds = registradosIds;
-        ViewBag.ProyectosPendientesIds = pendientesIds;
+        ViewBag.ProyectosInteresadosIds = interesadosIds;
         ViewBag.UsuarioActualId = usuarioActualId;
         return View(proyectos);
     }
@@ -70,6 +72,7 @@ public class ProyectosController(
             .Include(item => item.Registros)
                 .ThenInclude(registro => registro.Usuario)
                     .ThenInclude(usuario => usuario.Carrera)
+            .Include(item => item.Intereses)
             .FirstOrDefaultAsync(item => item.IdProyecto == id);
 
         if (proyecto is null)
@@ -104,14 +107,11 @@ public class ProyectosController(
                 .ExecuteUpdateAsync(update => update.SetProperty(n => n.Leida, true));
         }
 
-        ViewBag.EstaRegistrado = registroActual?.Estado == EstadoRegistroProyecto.Aceptado;
-        ViewBag.EstadoRegistroProyectoActual = registroActual?.Estado;
-        ViewBag.IdRegistroProyectoActual = registroActual?.IdRegistroProyecto;
+        ViewBag.EstaRegistrado = registroActual is not null &&
+            registroActual.Estado != EstadoRegistroProyecto.Rechazado;
+        ViewBag.EstaInteresado = int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioInteresadoId) &&
+            proyecto.Intereses.Any(interes => interes.IdUsuario == usuarioInteresadoId);
         ViewBag.PuedeEditar = puedeEditar;
-        ViewBag.PuedeRevisarColaboradores = User.IsInRole("Administrador") ||
-            User.IsInRole("Admin") ||
-            (registroActual is not null && int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var revisorId) &&
-             proyecto.IdUsuarioOrganizador == revisorId);
 
         return View(proyecto);
     }
@@ -185,6 +185,7 @@ public class ProyectosController(
             LugarReunion = modelo.LugarReunion.Trim(),
             FechaInicio = modelo.FechaInicio.Date,
             FechaFin = modelo.FechaFin.Date,
+            Cupo = modelo.Cupo,
             ImagenUrl = imagenUrl,
             IdCarrera = modelo.IdCarrera,
             FechaPublicacion = DateTime.UtcNow,
@@ -248,6 +249,7 @@ public class ProyectosController(
             LugarReunion = proyecto.LugarReunion,
             FechaInicio = proyecto.FechaInicio.Date,
             FechaFin = proyecto.FechaFin.Date,
+            Cupo = proyecto.Cupo,
             ImagenUrlActual = proyecto.ImagenUrl
         });
     }
@@ -321,6 +323,22 @@ public class ProyectosController(
         var nuevoNombre = modelo.Nombre.Trim();
         var nuevaDescripcion = modelo.Descripcion.Trim();
         var nuevoLugar = modelo.LugarReunion.Trim();
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var registrosExistentes = await dbContext.RegistrosProyectos.CountAsync(registro =>
+            registro.IdProyecto == proyecto.IdProyecto &&
+            registro.Estado != EstadoRegistroProyecto.Rechazado);
+        if (modelo.Cupo.HasValue && modelo.Cupo.Value < registrosExistentes)
+        {
+            ModelState.AddModelError(nameof(modelo.Cupo), "El cupo no puede ser menor que las inscripciones actuales.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            await transaction.RollbackAsync();
+            modelo.ImagenUrlActual = proyecto.ImagenUrl;
+            await CargarCatalogosAsync();
+            return View(modelo);
+        }
 
         if (modelo.ImagenArchivo is { Length: > 0 })
         {
@@ -328,22 +346,52 @@ public class ProyectosController(
             proyecto.ImagenUrl = await GuardarImagenProyectoAsync(modelo.ImagenArchivo);
         }
 
+        var estabaAprobado = proyecto.EstadoAprobacion == EstadoAprobacion.Aprobado;
         proyecto.Nombre = nuevoNombre;
         proyecto.Descripcion = nuevaDescripcion;
         proyecto.IdUsuarioOrganizador = responsable!.IdUsuario;
         proyecto.LugarReunion = nuevoLugar;
         proyecto.FechaInicio = modelo.FechaInicio.Date;
         proyecto.FechaFin = modelo.FechaFin.Date;
+        proyecto.Cupo = modelo.Cupo;
         proyecto.IdCarrera = modelo.IdCarrera;
-        proyecto.EstadoAprobacion = EstadoAprobacion.Pendiente;
-        proyecto.ComentarioAprobacion = null;
-        proyecto.FechaRevision = null;
-        proyecto.IdUsuarioRevisor = null;
-        proyecto.FechaSolicitud = DateTime.UtcNow;
+        if (estabaAprobado)
+        {
+            var colaboradores = await dbContext.RegistrosProyectos
+                .AsNoTracking()
+                .Where(registro =>
+                    registro.IdProyecto == proyecto.IdProyecto &&
+                    registro.Estado != EstadoRegistroProyecto.Rechazado)
+                .Select(registro => registro.IdUsuario)
+                .Distinct()
+                .ToListAsync();
+            foreach (var idUsuario in colaboradores)
+            {
+                dbContext.Notificaciones.Add(new Notificacion
+                {
+                    IdUsuario = idUsuario,
+                    IdProyecto = proyecto.IdProyecto,
+                    Titulo = $"El proyecto «{proyecto.Nombre}» fue actualizado",
+                    Mensaje = "El responsable actualizó la información del proyecto. Consulta la publicación para ver los cambios.",
+                    FechaCreacion = DateTime.UtcNow
+                });
+            }
+        }
+        else
+        {
+            proyecto.EstadoAprobacion = EstadoAprobacion.Pendiente;
+            proyecto.ComentarioAprobacion = null;
+            proyecto.FechaRevision = null;
+            proyecto.IdUsuarioRevisor = null;
+            proyecto.FechaSolicitud = DateTime.UtcNow;
+        }
 
         await dbContext.SaveChangesAsync();
+        await transaction.CommitAsync();
 
-        TempData["Mensaje"] = "Los cambios se enviaron al organizador para su aprobación.";
+        TempData["Mensaje"] = estabaAprobado
+            ? "Los cambios se guardaron y se notificó a las personas registradas."
+            : "Los cambios se enviaron al organizador para su aprobación.";
 
         return RedirectToAction(nameof(Detalle), new { id = proyecto.IdProyecto });
     }
@@ -371,56 +419,68 @@ public class ProyectosController(
 
         if (proyecto.IdUsuarioCreador == usuarioId || proyecto.IdUsuarioOrganizador == usuarioId)
         {
-            TempData["Mensaje"] = "No puedes solicitar colaborar en un proyecto que creaste o supervisas.";
+            TempData["Mensaje"] = "No puedes registrarte en un proyecto que creaste o supervisas.";
             return RedirectToAction(nameof(Detalle), new { id });
         }
 
         var registro = await dbContext.RegistrosProyectos
             .FirstOrDefaultAsync(item => item.IdUsuario == usuarioId && item.IdProyecto == id);
-        var nuevaSolicitud = false;
+        var yaEstabaRegistrado = registro is not null &&
+            registro.Estado != EstadoRegistroProyecto.Rechazado;
+        var debeGuardarRegistro = !yaEstabaRegistrado;
         if (registro is null)
         {
+            if (proyecto.Cupo.HasValue &&
+                await dbContext.RegistrosProyectos.CountAsync(item =>
+                    item.IdProyecto == id &&
+                    item.Estado != EstadoRegistroProyecto.Rechazado) >= proyecto.Cupo.Value)
+            {
+                TempData["Mensaje"] = "El proyecto ya alcanzó su cupo máximo de colaboradores.";
+                return RedirectToAction(nameof(Detalle), new { id });
+            }
+
             registro = new RegistroProyecto
             {
                 IdUsuario = usuarioId,
                 IdProyecto = id,
                 FechaRegistro = DateTime.UtcNow,
-                Estado = EstadoRegistroProyecto.Pendiente
+                Estado = EstadoRegistroProyecto.Aceptado
             };
             dbContext.RegistrosProyectos.Add(registro);
-            nuevaSolicitud = true;
         }
         else if (registro.Estado == EstadoRegistroProyecto.Rechazado)
         {
-            registro.Estado = EstadoRegistroProyecto.Pendiente;
+            if (proyecto.Cupo.HasValue &&
+                await dbContext.RegistrosProyectos.CountAsync(item =>
+                    item.IdProyecto == id &&
+                    item.Estado != EstadoRegistroProyecto.Rechazado) >= proyecto.Cupo.Value)
+            {
+                TempData["Mensaje"] = "El proyecto ya alcanzó su cupo máximo de colaboradores.";
+                return RedirectToAction(nameof(Detalle), new { id });
+            }
+
+            registro.Estado = EstadoRegistroProyecto.Aceptado;
             registro.IdUsuarioRevisor = null;
             registro.FechaRevision = null;
             registro.FechaRegistro = DateTime.UtcNow;
-            nuevaSolicitud = true;
+        }
+        else if (registro.Estado == EstadoRegistroProyecto.Pendiente)
+        {
+            registro.Estado = EstadoRegistroProyecto.Aceptado;
+            registro.IdUsuarioRevisor = null;
+            registro.FechaRevision = null;
+            debeGuardarRegistro = true;
         }
 
-        if (nuevaSolicitud)
+        if (debeGuardarRegistro)
         {
-            if (proyecto.IdUsuarioOrganizador is int idOrganizador &&
-                idOrganizador != usuarioId)
-            {
-                dbContext.Notificaciones.Add(new Notificacion
-                {
-                    IdUsuario = idOrganizador,
-                    IdProyecto = id,
-                    Titulo = $"Solicitud para colaborar en «{proyecto.Nombre}»",
-                    Mensaje = $"{User.Identity?.Name ?? "Un usuario"} solicita unirse como colaborador.",
-                    FechaCreacion = DateTime.UtcNow
-                });
-            }
-
             await dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
-            TempData["Mensaje"] = "Tu solicitud para colaborar se envió al organizador.";
+            TempData["Mensaje"] = "Tu registro como colaborador quedó confirmado.";
         }
         else
         {
-            TempData["Mensaje"] = "Ya estás aceptado o tienes una solicitud pendiente para este proyecto.";
+            TempData["Mensaje"] = "Ya estás registrado en este proyecto.";
         }
 
         if (Url.IsLocalUrl(returnUrl))
@@ -434,81 +494,53 @@ public class ProyectosController(
     [Authorize]
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ResolverSolicitudColaborador(
-        int id,
-        int idRegistroProyecto,
-        bool aceptar,
-        string? comentario)
+    public async Task<IActionResult> AlternarInteres(int id, string? returnUrl = null)
     {
         if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
         {
             return Challenge();
         }
 
-        var registro = await dbContext.RegistrosProyectos
-            .Include(item => item.Proyecto)
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var proyecto = await dbContext.Proyectos
+            .AsNoTracking()
             .FirstOrDefaultAsync(item =>
-                item.IdRegistroProyecto == idRegistroProyecto &&
-                item.IdProyecto == id);
-        if (registro is null)
+                item.IdProyecto == id &&
+                item.Activo &&
+                item.EstadoAprobacion == EstadoAprobacion.Aprobado);
+        if (proyecto is null)
         {
             return NotFound();
         }
 
-        var usuarioEsAdmin = User.IsInRole("Administrador") || User.IsInRole("Admin");
-        var usuarioEsOrganizadorActivo = await dbContext.Usuarios
-            .AsNoTracking()
-            .Include(usuario => usuario.Rol)
-            .AnyAsync(usuario =>
-                usuario.IdUsuario == usuarioId &&
-                usuario.Activo &&
-                (usuario.IdRol == 2 || usuario.Rol.Nombre.Contains("Organizador")));
-        if (!usuarioEsAdmin &&
-            (!usuarioEsOrganizadorActivo || registro.Proyecto.IdUsuarioOrganizador != usuarioId))
+        var interes = await dbContext.InteresesProyectos
+            .FirstOrDefaultAsync(item => item.IdUsuario == usuarioId && item.IdProyecto == id);
+        var marcado = interes is null;
+        if (interes is null)
         {
-            return Forbid();
+            dbContext.InteresesProyectos.Add(new InteresProyecto
+            {
+                IdUsuario = usuarioId,
+                IdProyecto = id,
+                FechaInteres = DateTime.UtcNow
+            });
         }
-
-        if (registro.Estado != EstadoRegistroProyecto.Pendiente)
+        else
         {
-            TempData["Mensaje"] = "La solicitud de colaboración ya fue revisada.";
-            return RedirectToAction(nameof(Detalle), new { id });
+            dbContext.InteresesProyectos.Remove(interes);
         }
-
-        if (!registro.Proyecto.Activo ||
-            registro.Proyecto.EstadoAprobacion != EstadoAprobacion.Aprobado)
-        {
-            TempData["Mensaje"] = "Solo puedes revisar solicitudes de proyectos activos y aprobados.";
-            return RedirectToAction(nameof(Detalle), new { id });
-        }
-
-        if (!aceptar && string.IsNullOrWhiteSpace(comentario))
-        {
-            TempData["Mensaje"] = "Indica el motivo para rechazar la solicitud.";
-            return RedirectToAction(nameof(Detalle), new { id });
-        }
-        if (comentario?.Length > 1000)
-        {
-            TempData["Mensaje"] = "El motivo no puede superar los 1000 caracteres.";
-            return RedirectToAction(nameof(Detalle), new { id });
-        }
-
-        registro.Estado = aceptar ? EstadoRegistroProyecto.Aceptado : EstadoRegistroProyecto.Rechazado;
-        registro.IdUsuarioRevisor = usuarioId;
-        registro.FechaRevision = DateTime.UtcNow;
-        dbContext.Notificaciones.Add(new Notificacion
-        {
-            IdUsuario = registro.IdUsuario,
-            IdProyecto = id,
-            Titulo = $"Solicitud de colaboración { (aceptar ? "aceptada" : "rechazada") }",
-            Mensaje = aceptar
-                ? $"El organizador aceptó tu solicitud para colaborar en «{registro.Proyecto.Nombre}»."
-                : $"El organizador rechazó tu solicitud para colaborar en «{registro.Proyecto.Nombre}». Motivo: {comentario!.Trim()}",
-            FechaCreacion = DateTime.UtcNow
-        });
 
         await dbContext.SaveChangesAsync();
-        TempData["Mensaje"] = aceptar ? "La solicitud de colaboración fue aceptada." : "La solicitud de colaboración fue rechazada.";
+        await transaction.CommitAsync();
+        TempData["Mensaje"] = marcado
+            ? "Marcaste que te interesa este proyecto. Esto no es una inscripción."
+            : "Quitaste este proyecto de tus intereses.";
+
+        if (Url.IsLocalUrl(returnUrl))
+        {
+            return Redirect(returnUrl!);
+        }
+
         return RedirectToAction(nameof(Detalle), new { id });
     }
 
@@ -593,7 +625,7 @@ public class ProyectosController(
             .AsNoTracking()
             .Where(registro =>
                 registro.IdProyecto == proyecto.IdProyecto &&
-                registro.Estado == EstadoRegistroProyecto.Aceptado)
+                registro.Estado != EstadoRegistroProyecto.Rechazado)
             .Select(registro => registro.IdUsuario)
             .Distinct()
             .Where(asistenteId => asistenteId != proyecto.IdUsuarioCreador && asistenteId != usuarioId)

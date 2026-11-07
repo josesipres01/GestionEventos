@@ -6,8 +6,8 @@ Aplicación web ASP.NET Core MVC para publicar y administrar eventos y proyectos
 
 - Registro e inicio de sesión con contraseñas almacenadas mediante el hasher de ASP.NET Core.
 - Exploración de eventos y proyectos publicados, con páginas de detalle.
-- Creación y edición de eventos y proyectos, con flujos de aprobación y permisos por rol.
-- Inscripción a eventos con fecha de fin y cupo máximo opcional; solicitudes de colaboración sujetas a aprobación del organizador.
+- Creación de eventos y proyectos con aprobación del organizador responsable; editar una publicación aprobada no requiere una nueva aprobación.
+- Inscripción directa a eventos y proyectos, con cupo máximo obligatorio para nuevas publicaciones y control de lugares disponibles.
 - Consulta y cancelación de participaciones, con notificaciones de cambios y bajas.
 - Notificaciones sobre cambios y bajas de eventos y proyectos.
 - Administración de usuarios, carreras y publicaciones.

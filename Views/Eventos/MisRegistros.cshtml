@@ -268,10 +268,7 @@
                          data-nexo-type="proyecto"
                          data-nexo-keywords="@palabrasClave">
                     <a asp-controller="Proyectos" asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="nexo-card-media d-block text-decoration-none">
-                        <span class="nexo-badge-type badge-proyecto">
-                            PROYECTO · @(regProyecto.Estado == EstadoRegistroProyecto.Aceptado ? "ACEPTADO" :
-                                regProyecto.Estado == EstadoRegistroProyecto.Pendiente ? "PENDIENTE" : "RECHAZADO")
-                        </span>
+                        <span class="nexo-badge-type badge-proyecto">PROYECTO · INSCRITO</span>
                         <img src="@imagenUrl" alt="@proyecto.Nombre" loading="lazy" />
                         <span class="nexo-card-index">@numeroTexto</span>
                     </a>

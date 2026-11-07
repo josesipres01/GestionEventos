@@ -39,6 +39,11 @@ public class EditarProyectoViewModel
     [Display(Name = "Fecha de fin")]
     public DateTime FechaFin { get; set; }
 
+    [Required(ErrorMessage = "Indica el cupo máximo de colaboradores.")]
+    [Range(1, int.MaxValue, ErrorMessage = "El cupo debe ser mayor que cero.")]
+    [Display(Name = "Cupo máximo de colaboradores")]
+    public int? Cupo { get; set; }
+
     public string? ImagenUrlActual { get; set; }
 
     [Display(Name = "Reemplazar imagen de miniatura (opcional)")]

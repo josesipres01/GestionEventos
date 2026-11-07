@@ -2,6 +2,7 @@
 @{
     ViewData["Title"] = Model.Nombre;
     var estaRegistrado = ViewBag.EstaRegistrado as bool? ?? false;
+    var estaInteresado = ViewBag.EstaInteresado as bool? ?? false;
     var puedeEditar = ViewBag.PuedeEditar as bool? ?? false;
     var registros = Model.Registros
         .OrderByDescending(r => r.FechaRegistro)
@@ -90,6 +91,7 @@
                 <span><strong>Lugar:</strong> <span class="text-white">@Model.Lugar</span></span>
                 <span><strong>Organiza:</strong> <span class="text-white">@nombreOrganizador</span></span>
                 <span><strong>Personas registradas:</strong> <span class="text-white">@registros.Count</span></span>
+                <span><strong>Personas interesadas:</strong> <span class="text-white">@Model.Intereses.Count</span></span>
                 @if (Model.Cupo.HasValue)
                 {
                     <span><strong>Cupo:</strong> <span class="text-white">@registros.Count / @Model.Cupo</span></span>
@@ -212,6 +214,8 @@
                 <dd class="fw-semibold mb-0">
                     @registros.Count @(registros.Count == 1 ? "persona registrada" : "personas registradas")
                 </dd>
+                <dt class="text-muted small text-uppercase mt-3">Personas interesadas</dt>
+                <dd class="fw-semibold mb-0">@Model.Intereses.Count</dd>
                 @if (Model.Cupo.HasValue)
                 {
                     <dt class="text-muted small text-uppercase mt-3">Cupo máximo</dt>
@@ -224,6 +228,20 @@
                 <div class="pt-3 border-top">
                     @if (User.Identity?.IsAuthenticated == true)
                     {
+                        <form asp-controller="Eventos"
+                              asp-action="AlternarInteres"
+                              asp-route-id="@Model.IdEvento"
+                              method="post"
+                              class="mb-3">
+                            <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                            <button type="submit" class="btn-nexo-heart w-100 justify-content-center @(estaInteresado ? "is-interested" : "")"
+                                    aria-pressed="@estaInteresado">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"></path></svg>
+                                <span>@(estaInteresado ? "Ya me interesa" : "Me interesa")</span>
+                                <span>(@Model.Intereses.Count)</span>
+                            </button>
+                            <small class="form-text text-muted d-block mt-1">Marcar interés no te inscribe ni reserva un lugar.</small>
+                        </form>
                         if (estaRegistrado)
                         {
                             <div class="btn-nexo-registered w-100 justify-content-center py-2 mb-2">
@@ -262,6 +280,13 @@
                     }
                     else
                     {
+                        <a asp-controller="Cuenta"
+                           asp-action="IniciarSesion"
+                           asp-route-returnUrl="@Context.Request.Path"
+                           class="btn-nexo-heart w-100 justify-content-center mb-2">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"></path></svg>
+                            <span>Inicia sesión para marcar interés (@Model.Intereses.Count)</span>
+                        </a>
                         <a asp-controller="Cuenta"
                            asp-action="IniciarSesion"
                            asp-route-returnUrl="@Context.Request.Path"

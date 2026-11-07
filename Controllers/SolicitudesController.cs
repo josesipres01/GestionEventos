@@ -411,7 +411,7 @@ public class SolicitudesController(GestionEventosDbContext dbContext) : Controll
                 .AsNoTracking()
                 .Where(registro =>
                     registro.IdProyecto == proyecto.IdProyecto &&
-                    registro.Estado == EstadoRegistroProyecto.Aceptado)
+                    registro.Estado != EstadoRegistroProyecto.Rechazado)
                 .Select(registro => registro.IdUsuario)
                 .Distinct()
                 .ToListAsync();

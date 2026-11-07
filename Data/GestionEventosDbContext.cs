@@ -12,6 +12,8 @@ public class GestionEventosDbContext(DbContextOptions<GestionEventosDbContext> o
     public DbSet<Proyecto> Proyectos => Set<Proyecto>();
     public DbSet<Registro> Registros => Set<Registro>();
     public DbSet<RegistroProyecto> RegistrosProyectos => Set<RegistroProyecto>();
+    public DbSet<InteresEvento> InteresesEventos => Set<InteresEvento>();
+    public DbSet<InteresProyecto> InteresesProyectos => Set<InteresProyecto>();
     public DbSet<Notificacion> Notificaciones => Set<Notificacion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -168,9 +170,13 @@ public class GestionEventosDbContext(DbContextOptions<GestionEventosDbContext> o
             .HasForeignKey(proyecto => proyecto.IdCarrera)
             .OnDelete(DeleteBehavior.NoAction);
         modelBuilder.Entity<Proyecto>()
-            .ToTable(table => table.HasCheckConstraint(
-                "CK_PROYECTOS_EstadoAprobacion",
-                "[EstadoAprobacion] IN ('Pendiente', 'Aprobado', 'Rechazado')"));
+            .ToTable(table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_PROYECTOS_EstadoAprobacion",
+                    "[EstadoAprobacion] IN ('Pendiente', 'Aprobado', 'Rechazado')");
+                table.HasCheckConstraint("CK_PROYECTOS_Cupo", "[Cupo] IS NULL OR [Cupo] > 0");
+            });
 
         modelBuilder.Entity<Registro>()
             .HasOne(registro => registro.Usuario)
@@ -238,6 +244,50 @@ public class GestionEventosDbContext(DbContextOptions<GestionEventosDbContext> o
             .ToTable(table => table.HasCheckConstraint(
                 "CK_REGISTROS_PROYECTOS_Estado",
                 "[Estado] IN ('Pendiente', 'Aceptado', 'Rechazado')"));
+
+        modelBuilder.Entity<InteresEvento>()
+            .HasOne(interes => interes.Usuario)
+            .WithMany(usuario => usuario.InteresesEventos)
+            .HasForeignKey(interes => interes.IdUsuario)
+            .OnDelete(DeleteBehavior.NoAction)
+            .HasConstraintName("FK_INTERESES_EVENTOS_USUARIOS");
+
+        modelBuilder.Entity<InteresEvento>()
+            .HasOne(interes => interes.Evento)
+            .WithMany(evento => evento.Intereses)
+            .HasForeignKey(interes => interes.IdEvento)
+            .OnDelete(DeleteBehavior.NoAction)
+            .HasConstraintName("FK_INTERESES_EVENTOS_EVENTOS");
+
+        modelBuilder.Entity<InteresEvento>()
+            .HasIndex(interes => new { interes.IdUsuario, interes.IdEvento })
+            .IsUnique()
+            .HasDatabaseName("UQ_INTERESES_EVENTOS_IdUsuario_IdEvento");
+        modelBuilder.Entity<InteresEvento>()
+            .HasIndex(interes => interes.IdEvento)
+            .HasDatabaseName("IX_INTERESES_EVENTOS_IdEvento");
+
+        modelBuilder.Entity<InteresProyecto>()
+            .HasOne(interes => interes.Usuario)
+            .WithMany(usuario => usuario.InteresesProyectos)
+            .HasForeignKey(interes => interes.IdUsuario)
+            .OnDelete(DeleteBehavior.NoAction)
+            .HasConstraintName("FK_INTERESES_PROYECTOS_USUARIOS");
+
+        modelBuilder.Entity<InteresProyecto>()
+            .HasOne(interes => interes.Proyecto)
+            .WithMany(proyecto => proyecto.Intereses)
+            .HasForeignKey(interes => interes.IdProyecto)
+            .OnDelete(DeleteBehavior.NoAction)
+            .HasConstraintName("FK_INTERESES_PROYECTOS_PROYECTOS");
+
+        modelBuilder.Entity<InteresProyecto>()
+            .HasIndex(interes => new { interes.IdUsuario, interes.IdProyecto })
+            .IsUnique()
+            .HasDatabaseName("UQ_INTERESES_PROYECTOS_IdUsuario_IdProyecto");
+        modelBuilder.Entity<InteresProyecto>()
+            .HasIndex(interes => interes.IdProyecto)
+            .HasDatabaseName("IX_INTERESES_PROYECTOS_IdProyecto");
 
         modelBuilder.Entity<Notificacion>()
             .HasOne(notificacion => notificacion.Usuario)

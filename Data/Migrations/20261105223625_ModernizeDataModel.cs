@@ -48,7 +48,6 @@ namespace GestionEventos.Data.Migrations
                 IF COL_LENGTH(N'dbo.EVENTOS', N'FechaFin') IS NULL
                 BEGIN
                     ALTER TABLE dbo.EVENTOS ADD FechaFin datetime2 NULL;
-                    UPDATE dbo.EVENTOS SET FechaFin = DATEADD(HOUR, 2, FechaHora);
                 END
                 IF COL_LENGTH(N'dbo.EVENTOS', N'Cupo') IS NULL
                     ALTER TABLE dbo.EVENTOS ADD Cupo int NULL;
@@ -57,20 +56,21 @@ namespace GestionEventos.Data.Migrations
                 IF COL_LENGTH(N'dbo.EVENTOS', N'IdUsuarioEliminador') IS NULL
                     ALTER TABLE dbo.EVENTOS ADD IdUsuarioEliminador int NULL;
 
-                UPDATE dbo.EVENTOS
-                SET IdUsuarioSolicitante = IdUsuarioOrganizador
-                WHERE IdUsuarioSolicitante IS NULL;
-                UPDATE dbo.EVENTOS
-                SET EstadoAprobacion = N'Aprobado'
-                WHERE EstadoAprobacion IS NULL OR EstadoAprobacion NOT IN (N'Pendiente', N'Aprobado', N'Rechazado');
-                UPDATE dbo.EVENTOS SET FechaSolicitud = COALESCE(FechaSolicitud, FechaCreacion, SYSUTCDATETIME());
-                UPDATE dbo.EVENTOS SET FechaCreacion = COALESCE(FechaCreacion, FechaSolicitud, SYSUTCDATETIME());
-                UPDATE dbo.EVENTOS SET FechaFin = DATEADD(HOUR, 2, FechaHora) WHERE FechaFin IS NULL OR FechaFin <= FechaHora;
-                ALTER TABLE dbo.EVENTOS ALTER COLUMN IdUsuarioSolicitante int NOT NULL;
-                ALTER TABLE dbo.EVENTOS ALTER COLUMN EstadoAprobacion nvarchar(20) NOT NULL;
-                ALTER TABLE dbo.EVENTOS ALTER COLUMN FechaSolicitud datetime2 NOT NULL;
-                ALTER TABLE dbo.EVENTOS ALTER COLUMN FechaCreacion datetime2 NOT NULL;
-                ALTER TABLE dbo.EVENTOS ALTER COLUMN FechaFin datetime2 NOT NULL;
+                EXEC sys.sp_executesql N'
+                    UPDATE dbo.EVENTOS
+                    SET IdUsuarioSolicitante = IdUsuarioOrganizador
+                    WHERE IdUsuarioSolicitante IS NULL;
+                    UPDATE dbo.EVENTOS
+                    SET EstadoAprobacion = N''Aprobado''
+                    WHERE EstadoAprobacion IS NULL OR EstadoAprobacion NOT IN (N''Pendiente'', N''Aprobado'', N''Rechazado'');
+                    UPDATE dbo.EVENTOS SET FechaSolicitud = COALESCE(FechaSolicitud, FechaCreacion, SYSUTCDATETIME());
+                    UPDATE dbo.EVENTOS SET FechaCreacion = COALESCE(FechaCreacion, FechaSolicitud, SYSUTCDATETIME());
+                    UPDATE dbo.EVENTOS SET FechaFin = DATEADD(HOUR, 2, FechaHora) WHERE FechaFin IS NULL OR FechaFin <= FechaHora;
+                    ALTER TABLE dbo.EVENTOS ALTER COLUMN IdUsuarioSolicitante int NOT NULL;
+                    ALTER TABLE dbo.EVENTOS ALTER COLUMN EstadoAprobacion nvarchar(20) NOT NULL;
+                    ALTER TABLE dbo.EVENTOS ALTER COLUMN FechaSolicitud datetime2 NOT NULL;
+                    ALTER TABLE dbo.EVENTOS ALTER COLUMN FechaCreacion datetime2 NOT NULL;
+                    ALTER TABLE dbo.EVENTOS ALTER COLUMN FechaFin datetime2 NOT NULL;';
 
                 IF COL_LENGTH(N'dbo.PROYECTOS', N'Activo') IS NULL
                     ALTER TABLE dbo.PROYECTOS ADD Activo bit NOT NULL CONSTRAINT DF_PROYECTOS_Activo_Migration DEFAULT (1);
@@ -135,12 +135,13 @@ namespace GestionEventos.Data.Migrations
                           ));';
                     ALTER TABLE dbo.PROYECTOS DROP COLUMN NombreResponsable;
                 END
-                UPDATE dbo.PROYECTOS
-                SET EstadoAprobacion = N'Aprobado'
-                WHERE EstadoAprobacion IS NULL OR EstadoAprobacion NOT IN (N'Pendiente', N'Aprobado', N'Rechazado');
-                UPDATE dbo.PROYECTOS SET FechaSolicitud = COALESCE(FechaSolicitud, FechaPublicacion, SYSUTCDATETIME());
-                ALTER TABLE dbo.PROYECTOS ALTER COLUMN EstadoAprobacion nvarchar(20) NOT NULL;
-                ALTER TABLE dbo.PROYECTOS ALTER COLUMN FechaSolicitud datetime2 NOT NULL;
+                EXEC sys.sp_executesql N'
+                    UPDATE dbo.PROYECTOS
+                    SET EstadoAprobacion = N''Aprobado''
+                    WHERE EstadoAprobacion IS NULL OR EstadoAprobacion NOT IN (N''Pendiente'', N''Aprobado'', N''Rechazado'');
+                    UPDATE dbo.PROYECTOS SET FechaSolicitud = COALESCE(FechaSolicitud, FechaPublicacion, SYSUTCDATETIME());
+                    ALTER TABLE dbo.PROYECTOS ALTER COLUMN EstadoAprobacion nvarchar(20) NOT NULL;
+                    ALTER TABLE dbo.PROYECTOS ALTER COLUMN FechaSolicitud datetime2 NOT NULL;';
 
                 IF OBJECT_ID(N'dbo.REGISTROS_PROYECTOS', N'U') IS NULL
                 BEGIN
@@ -161,9 +162,10 @@ namespace GestionEventos.Data.Migrations
                     ALTER TABLE dbo.REGISTROS_PROYECTOS ADD IdUsuarioRevisor int NULL;
                 IF COL_LENGTH(N'dbo.REGISTROS_PROYECTOS', N'FechaRevision') IS NULL
                     ALTER TABLE dbo.REGISTROS_PROYECTOS ADD FechaRevision datetime2 NULL;
-                UPDATE dbo.REGISTROS_PROYECTOS
-                SET Estado = N'Aceptado'
-                WHERE Estado IS NULL OR Estado NOT IN (N'Pendiente', N'Aceptado', N'Rechazado');
+                EXEC sys.sp_executesql N'
+                    UPDATE dbo.REGISTROS_PROYECTOS
+                    SET Estado = N''Aceptado''
+                    WHERE Estado IS NULL OR Estado NOT IN (N''Pendiente'', N''Aceptado'', N''Rechazado'');';
 
                 IF OBJECT_ID(N'dbo.NOTIFICACIONES', N'U') IS NULL
                 BEGIN
@@ -191,16 +193,17 @@ namespace GestionEventos.Data.Migrations
                     N'CK_NOTIFICACIONES_UnaPublicacion');
                 IF @dropChecks <> N'' EXEC sys.sp_executesql @dropChecks;
 
-                ALTER TABLE dbo.EVENTOS ADD CONSTRAINT CK_EVENTOS_EstadoAprobacion
-                    CHECK (EstadoAprobacion IN (N'Pendiente', N'Aprobado', N'Rechazado'));
-                ALTER TABLE dbo.EVENTOS ADD CONSTRAINT CK_EVENTOS_Cupo CHECK (Cupo IS NULL OR Cupo > 0);
-                ALTER TABLE dbo.EVENTOS ADD CONSTRAINT CK_EVENTOS_Fechas CHECK (FechaFin > FechaHora);
-                ALTER TABLE dbo.PROYECTOS ADD CONSTRAINT CK_PROYECTOS_EstadoAprobacion
-                    CHECK (EstadoAprobacion IN (N'Pendiente', N'Aprobado', N'Rechazado'));
-                ALTER TABLE dbo.REGISTROS_PROYECTOS ADD CONSTRAINT CK_REGISTROS_PROYECTOS_Estado
-                    CHECK (Estado IN (N'Pendiente', N'Aceptado', N'Rechazado'));
-                ALTER TABLE dbo.NOTIFICACIONES ADD CONSTRAINT CK_NOTIFICACIONES_UnaPublicacion
-                    CHECK (IdEvento IS NULL OR IdProyecto IS NULL);
+                EXEC sys.sp_executesql N'
+                    ALTER TABLE dbo.EVENTOS ADD CONSTRAINT CK_EVENTOS_EstadoAprobacion
+                        CHECK (EstadoAprobacion IN (N''Pendiente'', N''Aprobado'', N''Rechazado''));
+                    ALTER TABLE dbo.EVENTOS ADD CONSTRAINT CK_EVENTOS_Cupo CHECK (Cupo IS NULL OR Cupo > 0);
+                    ALTER TABLE dbo.EVENTOS ADD CONSTRAINT CK_EVENTOS_Fechas CHECK (FechaFin > FechaHora);
+                    ALTER TABLE dbo.PROYECTOS ADD CONSTRAINT CK_PROYECTOS_EstadoAprobacion
+                        CHECK (EstadoAprobacion IN (N''Pendiente'', N''Aprobado'', N''Rechazado''));
+                    ALTER TABLE dbo.REGISTROS_PROYECTOS ADD CONSTRAINT CK_REGISTROS_PROYECTOS_Estado
+                        CHECK (Estado IN (N''Pendiente'', N''Aceptado'', N''Rechazado''));
+                    ALTER TABLE dbo.NOTIFICACIONES ADD CONSTRAINT CK_NOTIFICACIONES_UnaPublicacion
+                        CHECK (IdEvento IS NULL OR IdProyecto IS NULL);';
 
                 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.EVENTOS') AND name = N'IX_EVENTOS_Activo_EstadoAprobacion')
                     CREATE INDEX IX_EVENTOS_Activo_EstadoAprobacion ON dbo.EVENTOS(Activo, EstadoAprobacion);

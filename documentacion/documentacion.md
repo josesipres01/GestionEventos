@@ -14,7 +14,7 @@ La solución sigue el patrón Model-View-Controller (MVC) de ASP.NET Core. Los c
 - `Data/GestionEventosDbContext.cs`: configuración de entidades y relaciones.
 - `Data/Migrations/`: única fuente de cambios del esquema.
 - `Data/InicializadorBaseDatos.cs`: adopción de bases legadas reconocidas y semillas de datos iniciales.
-- `Models/`: entidades de usuario, rol, carrera, evento, proyecto, registros y notificaciones.
+- `Models/`: entidades de usuario, rol, carrera, evento, proyecto, registros, intereses y notificaciones.
 - `Views/`: interfaz Razor.
 
 ## Modelo de datos
@@ -26,23 +26,26 @@ El esquema se define exclusivamente en las migraciones de EF Core. El archivo [`
 | `ROLES` | Roles de estudiante, organizador/docente y administrador. |
 | `CARRERAS` | Carreras asociadas a usuarios y proyectos. |
 | `USUARIOS` | Perfil, correo único, rol, estado y hash de contraseña. |
-| `EVENTOS` | Publicaciones con organizador, solicitante, revisor, eliminador, fecha de fin, cupo opcional y estado de aprobación controlado. |
-| `PROYECTOS` | Publicaciones con creador, organizador responsable, revisor, eliminador, carrera y estado de aprobación controlado. |
+| `EVENTOS` | Publicaciones con organizador, solicitante, revisor, eliminador, fecha de fin, cupo y estado de aprobación controlado. El cupo sigue siendo nullable para publicaciones anteriores. |
+| `PROYECTOS` | Publicaciones con creador, organizador responsable, revisor, eliminador, carrera, cupo máximo y estado de aprobación controlado. |
 | `REGISTROS` | Inscripciones de usuarios a eventos, con fecha; único por usuario y evento. |
-| `REGISTROS_PROYECTOS` | Solicitudes de colaboración con estado, revisión y fecha; único por usuario y proyecto. |
+| `REGISTROS_PROYECTOS` | Inscripciones directas de colaboradores con estado y fecha; único por usuario y proyecto. |
+| `INTERESES_EVENTOS` | Intereses independientes de las inscripciones; único por usuario y evento. |
+| `INTERESES_PROYECTOS` | Intereses independientes de las inscripciones; único por usuario y proyecto. |
 | `NOTIFICACIONES` | Avisos con fecha y estado de lectura; asociados a un evento, a un proyecto o a ninguno. |
 
-Las referencias a usuarios usan `NO ACTION`: las cuentas deben desactivarse lógicamente para preservar historial. La baja de una publicación conserva sus registros y guarda quién la realizó. Los avisos de baja de proyectos se envían al creador y a los colaboradores aceptados.
+Las referencias a usuarios usan `NO ACTION`: las cuentas deben desactivarse lógicamente para preservar historial. La baja de una publicación conserva sus registros y guarda quién la realizó. Los avisos de baja de proyectos se envían al creador y a las personas inscritas.
 
-Las solicitudes de colaboración permanecen pendientes hasta que el organizador asignado las acepte o rechace. Solo los colaboradores aceptados se muestran como participantes. El cupo de un evento es opcional; cuando se define, las inscripciones se serializan y el servidor impide excederlo.
+Al crear un evento o proyecto, el autor debe definir el cupo y enviar la propuesta al organizador responsable para su aprobación. Las personas pueden marcar interés sin inscribirse: estos datos se guardan aparte, no consumen cupo y no aparecen en las listas de participantes. La inscripción es una acción independiente; el servidor serializa los registros y no permite exceder el cupo. Las publicaciones existentes sin cupo conservan su comportamiento sin límite hasta que se les asigne uno.
 
 ## Flujos principales
 
 1. **Cuenta:** el usuario crea una cuenta de estudiante o inicia sesión. La autenticación utiliza cookies; las contraseñas se procesan con `IPasswordHasher<Usuario>`.
-2. **Eventos:** los usuarios exploran eventos y pueden inscribirse con sesión iniciada. Organizadores gestionan sus publicaciones y los administradores resuelven tareas administrativas.
-3. **Proyectos:** usuarios exploran proyectos y se registran como colaboradores. Las solicitudes se someten a los flujos de aprobación configurados por rol.
-4. **Participación y avisos:** el usuario consulta y cancela sus registros desde su agenda. Las notificaciones se muestran en la vista de agenda.
-5. **Recursos no encontrados:** si una ruta es inválida o un recurso no está disponible, se muestra la vista 404 de la aplicación y se conserva el estado HTTP 404.
+2. **Interés:** una persona con sesión iniciada puede marcar o quitar interés con el botón de corazón en un evento o proyecto aprobado. Se guarda el interés sin crear una inscripción ni reservar cupo.
+3. **Eventos:** al crear un evento, el autor indica el cupo y envía la propuesta al organizador responsable. El evento aparece en el catálogo al ser aprobado. Para inscribirse, la persona inicia sesión, abre un evento aprobado y se registra. El sistema evita duplicados y, si el evento tiene cupo definido, no acepta más registros que el límite. La inscripción y su fecha quedan guardadas; se puede consultar o cancelar desde la agenda personal.
+4. **Proyectos:** al crear un proyecto, el autor indica el cupo y envía la propuesta al organizador responsable. Al aprobarse y publicarse, un estudiante con sesión iniciada puede registrarse directamente como colaborador: no se envía una solicitud pendiente ni requiere aprobación individual. El sistema evita duplicados y no excede el cupo definido; la persona puede consultar o cancelar su registro desde la agenda. Editar una publicación aprobada no inicia otra revisión.
+5. **Participación y avisos:** el usuario consulta y cancela sus registros desde su agenda. Las notificaciones se muestran en la vista de agenda.
+6. **Recursos no encontrados:** si una ruta es inválida o un recurso no está disponible, se muestra la vista 404 de la aplicación y se conserva el estado HTTP 404.
 
 ## Inicialización y migraciones
 
@@ -79,4 +82,4 @@ dotnet build GestionEventos.csproj
 dotnet test tests/GestionEventos.Tests/GestionEventos.Tests.csproj
 ```
 
-Las pruebas usan una base SQLite efímera y cubren permisos/revisión de colaboradores, inscripciones duplicadas y cupo, baja del proyecto y notificaciones. El workflow `.github/workflows/dotnet.yml` ejecuta build y test en GitHub Actions. La ejecución de la aplicación requiere SQL Server accesible.
+Las pruebas usan una base SQLite efímera y cubren permisos/revisión de colaboradores, inscripciones e intereses independientes, duplicados y cupo, baja del proyecto y notificaciones. El workflow `.github/workflows/dotnet.yml` ejecuta build y test en GitHub Actions. La ejecución de la aplicación requiere SQL Server accesible.

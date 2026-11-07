@@ -13,7 +13,7 @@ public class RegistroProyecto
     public int IdUsuario { get; set; }
     public int IdProyecto { get; set; }
     public DateTime FechaRegistro { get; set; }
-    public EstadoRegistroProyecto Estado { get; set; } = EstadoRegistroProyecto.Pendiente;
+    public EstadoRegistroProyecto Estado { get; set; } = EstadoRegistroProyecto.Aceptado;
     public int? IdUsuarioRevisor { get; set; }
     public DateTime? FechaRevision { get; set; }
 

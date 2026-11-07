@@ -154,6 +154,66 @@ namespace GestionEventos.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("GestionEventos.Models.InteresEvento", b =>
+                {
+                    b.Property<int>("IdInteresEvento")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("IdInteresEvento");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdInteresEvento"));
+
+                    b.Property<DateTime>("FechaInteres")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("IdEvento")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IdUsuario")
+                        .HasColumnType("int");
+
+                    b.HasKey("IdInteresEvento");
+
+                    b.HasIndex("IdEvento")
+                        .HasDatabaseName("IX_INTERESES_EVENTOS_IdEvento");
+
+                    b.HasIndex("IdUsuario", "IdEvento")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_INTERESES_EVENTOS_IdUsuario_IdEvento");
+
+                    b.ToTable("INTERESES_EVENTOS");
+                });
+
+            modelBuilder.Entity("GestionEventos.Models.InteresProyecto", b =>
+                {
+                    b.Property<int>("IdInteresProyecto")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("IdInteresProyecto");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdInteresProyecto"));
+
+                    b.Property<DateTime>("FechaInteres")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("IdProyecto")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IdUsuario")
+                        .HasColumnType("int");
+
+                    b.HasKey("IdInteresProyecto");
+
+                    b.HasIndex("IdProyecto")
+                        .HasDatabaseName("IX_INTERESES_PROYECTOS_IdProyecto");
+
+                    b.HasIndex("IdUsuario", "IdProyecto")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_INTERESES_PROYECTOS_IdUsuario_IdProyecto");
+
+                    b.ToTable("INTERESES_PROYECTOS");
+                });
+
             modelBuilder.Entity("GestionEventos.Models.Notificacion", b =>
                 {
                     b.Property<int>("IdNotificacion")
@@ -219,6 +279,9 @@ namespace GestionEventos.Data.Migrations
                     b.Property<string>("ComentarioAprobacion")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("Cupo")
+                        .HasColumnType("int");
 
                     b.Property<string>("Descripcion")
                         .IsRequired()
@@ -308,6 +371,8 @@ namespace GestionEventos.Data.Migrations
 
                     b.ToTable("PROYECTOS", t =>
                         {
+                            t.HasCheckConstraint("CK_PROYECTOS_Cupo", "[Cupo] IS NULL OR [Cupo] > 0");
+
                             t.HasCheckConstraint("CK_PROYECTOS_EstadoAprobacion", "[EstadoAprobacion] IN ('Pendiente', 'Aprobado', 'Rechazado')");
                         });
                 });
@@ -511,6 +576,48 @@ namespace GestionEventos.Data.Migrations
                     b.Navigation("Solicitante");
                 });
 
+            modelBuilder.Entity("GestionEventos.Models.InteresEvento", b =>
+                {
+                    b.HasOne("GestionEventos.Models.Evento", "Evento")
+                        .WithMany("Intereses")
+                        .HasForeignKey("IdEvento")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
+                        .HasConstraintName("FK_INTERESES_EVENTOS_EVENTOS");
+
+                    b.HasOne("GestionEventos.Models.Usuario", "Usuario")
+                        .WithMany("InteresesEventos")
+                        .HasForeignKey("IdUsuario")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
+                        .HasConstraintName("FK_INTERESES_EVENTOS_USUARIOS");
+
+                    b.Navigation("Evento");
+
+                    b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("GestionEventos.Models.InteresProyecto", b =>
+                {
+                    b.HasOne("GestionEventos.Models.Proyecto", "Proyecto")
+                        .WithMany("Intereses")
+                        .HasForeignKey("IdProyecto")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
+                        .HasConstraintName("FK_INTERESES_PROYECTOS_PROYECTOS");
+
+                    b.HasOne("GestionEventos.Models.Usuario", "Usuario")
+                        .WithMany("InteresesProyectos")
+                        .HasForeignKey("IdUsuario")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
+                        .HasConstraintName("FK_INTERESES_PROYECTOS_USUARIOS");
+
+                    b.Navigation("Proyecto");
+
+                    b.Navigation("Usuario");
+                });
+
             modelBuilder.Entity("GestionEventos.Models.Notificacion", b =>
                 {
                     b.HasOne("GestionEventos.Models.Evento", "Evento")
@@ -652,11 +759,15 @@ namespace GestionEventos.Data.Migrations
 
             modelBuilder.Entity("GestionEventos.Models.Evento", b =>
                 {
+                    b.Navigation("Intereses");
+
                     b.Navigation("Registros");
                 });
 
             modelBuilder.Entity("GestionEventos.Models.Proyecto", b =>
                 {
+                    b.Navigation("Intereses");
+
                     b.Navigation("Registros");
                 });
 
@@ -668,6 +779,10 @@ namespace GestionEventos.Data.Migrations
             modelBuilder.Entity("GestionEventos.Models.Usuario", b =>
                 {
                     b.Navigation("EventosOrganizados");
+
+                    b.Navigation("InteresesEventos");
+
+                    b.Navigation("InteresesProyectos");
 
                     b.Navigation("Notificaciones");
 

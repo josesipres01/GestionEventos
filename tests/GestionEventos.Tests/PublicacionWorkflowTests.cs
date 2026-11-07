@@ -34,6 +34,12 @@ public class PublicacionWorkflowTests
         Assert.Contains(db.Model.FindEntityType(typeof(RegistroProyecto))!.GetIndexes(),
             index => index.IsUnique && index.Properties.Select(property => property.Name)
                 .SequenceEqual([nameof(RegistroProyecto.IdUsuario), nameof(RegistroProyecto.IdProyecto)]));
+        Assert.Contains(db.Model.FindEntityType(typeof(InteresEvento))!.GetIndexes(),
+            index => index.IsUnique && index.Properties.Select(property => property.Name)
+                .SequenceEqual([nameof(InteresEvento.IdUsuario), nameof(InteresEvento.IdEvento)]));
+        Assert.Contains(db.Model.FindEntityType(typeof(InteresProyecto))!.GetIndexes(),
+            index => index.IsUnique && index.Properties.Select(property => property.Name)
+                .SequenceEqual([nameof(InteresProyecto.IdUsuario), nameof(InteresProyecto.IdProyecto)]));
     }
 
     [Fact]
@@ -56,11 +62,30 @@ public class PublicacionWorkflowTests
         var project = await db.Proyectos.SingleAsync(item => item.IdProyecto == 10);
         Assert.False(project.Activo);
         Assert.Equal(2, project.IdUsuarioEliminador);
-        Assert.Equal(new[] { 1, 3 }, await db.Notificaciones.OrderBy(n => n.IdUsuario).Select(n => n.IdUsuario).ToArrayAsync());
+        Assert.Equal(new[] { 1, 3, 4 }, await db.Notificaciones.OrderBy(n => n.IdUsuario).Select(n => n.IdUsuario).ToArrayAsync());
     }
 
     [Fact]
-    public async Task ResolverColaborador_OnlyAssignedOrganizerCanAcceptAndAcceptanceIsAudited()
+    public async Task RegisterProject_ConfirmsRegistrationWithoutOrganizerApproval()
+    {
+        await using var connection = await CreateOpenConnectionAsync();
+        await using var db = CreateDbContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await SeedProjectAsync(db);
+
+        var controller = CreateProjectController(db, actorId: 3);
+        var result = await controller.RegistrarInteres(10);
+
+        Assert.IsType<RedirectToActionResult>(result);
+        var registration = await db.RegistrosProyectos.SingleAsync();
+        Assert.Equal(EstadoRegistroProyecto.Aceptado, registration.Estado);
+        Assert.Null(registration.IdUsuarioRevisor);
+        Assert.Null(registration.FechaRevision);
+        Assert.Empty(await db.Notificaciones.ToListAsync());
+    }
+
+    [Fact]
+    public async Task RegisterProject_DoesNotExceedCapacity()
     {
         await using var connection = await CreateOpenConnectionAsync();
         await using var db = CreateDbContext(connection);
@@ -70,26 +95,16 @@ public class PublicacionWorkflowTests
         {
             IdUsuario = 3,
             IdProyecto = 10,
-            Estado = EstadoRegistroProyecto.Pendiente,
+            Estado = EstadoRegistroProyecto.Aceptado,
             FechaRegistro = DateTime.UtcNow
         });
         await db.SaveChangesAsync();
 
-        var unauthorized = CreateProjectController(db, actorId: 3);
-        var forbidden = await unauthorized.ResolverSolicitudColaborador(10, 1, aceptar: true, comentario: null);
-        Assert.IsType<ForbidResult>(forbidden);
-        Assert.Equal(EstadoRegistroProyecto.Pendiente,
-            (await db.RegistrosProyectos.SingleAsync()).Estado);
-
-        var organizer = CreateProjectController(db, actorId: 2, role: "Organizador/Docente");
-        var result = await organizer.ResolverSolicitudColaborador(10, 1, aceptar: true, comentario: null);
+        var controller = CreateProjectController(db, actorId: 4);
+        var result = await controller.RegistrarInteres(10);
 
         Assert.IsType<RedirectToActionResult>(result);
-        var registration = await db.RegistrosProyectos.SingleAsync();
-        Assert.Equal(EstadoRegistroProyecto.Aceptado, registration.Estado);
-        Assert.Equal(2, registration.IdUsuarioRevisor);
-        Assert.NotNull(registration.FechaRevision);
-        Assert.Equal(1, await db.Notificaciones.CountAsync(n => n.IdUsuario == 3 && n.IdProyecto == 10));
+        Assert.Equal(1, await db.RegistrosProyectos.CountAsync(registration => registration.IdProyecto == 10));
     }
 
     [Fact]
@@ -126,6 +141,55 @@ public class PublicacionWorkflowTests
 
         Assert.IsType<RedirectToActionResult>(result);
         Assert.Equal(1, await db.Registros.CountAsync(registration => registration.IdUsuario == 3 && registration.IdEvento == 20));
+    }
+
+    [Fact]
+    public async Task MarkEventInterest_DoesNotRegisterOrConsumeCapacity_AndCanBeRemoved()
+    {
+        await using var connection = await CreateOpenConnectionAsync();
+        await using var db = CreateDbContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await SeedUsersAsync(db);
+        db.Eventos.Add(CreateEvent(id: 20, organizerId: 2, creatorId: 1, capacity: 1));
+        db.Registros.Add(new Registro { IdUsuario = 3, IdEvento = 20, FechaRegistro = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var controller = CreateEventController(db, actorId: 4);
+        Assert.IsType<RedirectToActionResult>(await controller.AlternarInteres(20));
+
+        Assert.Equal(1, await db.InteresesEventos.CountAsync(interes => interes.IdUsuario == 4 && interes.IdEvento == 20));
+        Assert.Equal(1, await db.Registros.CountAsync(registro => registro.IdEvento == 20));
+        Assert.DoesNotContain(await db.Registros.ToListAsync(), registro => registro.IdUsuario == 4);
+
+        Assert.IsType<RedirectToActionResult>(await controller.AlternarInteres(20));
+        Assert.Empty(await db.InteresesEventos.ToListAsync());
+    }
+
+    [Fact]
+    public async Task MarkProjectInterest_DoesNotRegisterOrConsumeCapacity_AndCanBeRemoved()
+    {
+        await using var connection = await CreateOpenConnectionAsync();
+        await using var db = CreateDbContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await SeedProjectAsync(db);
+        db.RegistrosProyectos.Add(new RegistroProyecto
+        {
+            IdUsuario = 4,
+            IdProyecto = 10,
+            Estado = EstadoRegistroProyecto.Aceptado,
+            FechaRegistro = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var controller = CreateProjectController(db, actorId: 3);
+        Assert.IsType<RedirectToActionResult>(await controller.AlternarInteres(10));
+
+        Assert.Equal(1, await db.InteresesProyectos.CountAsync(interes => interes.IdUsuario == 3 && interes.IdProyecto == 10));
+        Assert.Equal(1, await db.RegistrosProyectos.CountAsync(registro => registro.IdProyecto == 10));
+        Assert.DoesNotContain(await db.RegistrosProyectos.ToListAsync(), registro => registro.IdUsuario == 3);
+
+        Assert.IsType<RedirectToActionResult>(await controller.AlternarInteres(10));
+        Assert.Empty(await db.InteresesProyectos.ToListAsync());
     }
 
     private static async Task<SqliteConnection> CreateOpenConnectionAsync()
@@ -173,6 +237,7 @@ public class PublicacionWorkflowTests
             LugarReunion = "Campus",
             FechaInicio = DateTime.UtcNow.Date,
             FechaFin = DateTime.UtcNow.Date.AddDays(1),
+            Cupo = 1,
             IdCarrera = career.IdCarrera,
             FechaPublicacion = DateTime.UtcNow,
             FechaSolicitud = DateTime.UtcNow,
@@ -220,7 +285,7 @@ public class PublicacionWorkflowTests
         string role = "Estudiante")
     {
         var controller = new ProyectosController(db, null!, null!);
-        ConfigureController(controller, actorId, role);
+        ConfigureController(controller, actorId, role, configureUrl: true);
         return controller;
     }
 

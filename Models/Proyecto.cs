@@ -33,6 +33,8 @@ public class Proyecto : IAprobacionPublicacion
 
     public DateTime FechaInicio { get; set; }
     public DateTime FechaFin { get; set; }
+    [Range(1, int.MaxValue)]
+    public int? Cupo { get; set; }
 
     [StringLength(500)]
     public string? ImagenUrl { get; set; }
@@ -51,4 +53,5 @@ public class Proyecto : IAprobacionPublicacion
     public Usuario? Organizador { get; set; }
     public Carrera Carrera { get; set; } = null!;
     public ICollection<RegistroProyecto> Registros { get; set; } = new List<RegistroProyecto>();
+    public ICollection<InteresProyecto> Intereses { get; set; } = new List<InteresProyecto>();
 }

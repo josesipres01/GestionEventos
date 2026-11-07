@@ -72,6 +72,13 @@
             </div>
 
             <div class="mb-4">
+                <label asp-for="Cupo" class="nexo-label"></label>
+                <input asp-for="Cupo" type="number" min="1" class="nexo-input" />
+                <span asp-validation-for="Cupo" class="text-danger small"></span>
+                <div class="form-text text-muted small mt-1">El cupo no puede ser menor que las personas ya registradas.</div>
+            </div>
+
+            <div class="mb-4">
                 <label asp-for="ImagenArchivo" class="nexo-label"></label>
                 <input asp-for="ImagenArchivo"
                        type="file"

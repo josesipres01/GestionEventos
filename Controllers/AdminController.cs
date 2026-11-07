@@ -391,7 +391,7 @@ public class AdminController(
             .AsNoTracking()
             .Where(registro =>
                 registro.IdProyecto == proyecto.IdProyecto &&
-                registro.Estado == EstadoRegistroProyecto.Aceptado)
+                registro.Estado != EstadoRegistroProyecto.Rechazado)
             .Select(registro => registro.IdUsuario)
             .Distinct()
             .Where(asistenteId => asistenteId != proyecto.IdUsuarioCreador &&

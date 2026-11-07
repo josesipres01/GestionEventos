@@ -2,17 +2,13 @@
 @{
     ViewData["Title"] = Model.Nombre;
     var estaRegistrado = ViewBag.EstaRegistrado as bool? ?? false;
+    var estaInteresado = ViewBag.EstaInteresado as bool? ?? false;
     var puedeEditar = ViewBag.PuedeEditar as bool? ?? false;
-    var puedeRevisarColaboradores = ViewBag.PuedeRevisarColaboradores as bool? ?? false;
-    var estadoRegistroActual = ViewBag.EstadoRegistroProyectoActual as EstadoRegistroProyecto?;
     var registros = Model.Registros
-        .Where(r => r.Estado == EstadoRegistroProyecto.Aceptado)
+        .Where(r => r.Estado != EstadoRegistroProyecto.Rechazado)
         .OrderByDescending(r => r.FechaRegistro)
         .ToList();
-    var solicitudesColaborador = Model.Registros
-        .Where(r => r.Estado == EstadoRegistroProyecto.Pendiente)
-        .OrderBy(r => r.FechaRegistro)
-        .ToList();
+    var cupoCompleto = Model.Cupo.HasValue && registros.Count >= Model.Cupo.Value;
 
     var autorNombre = string.Join(
         " ",
@@ -100,6 +96,7 @@
                 <span><strong>Lugar de reunión:</strong> <span class="text-white">@Model.LugarReunion</span></span>
                 <span><strong>Periodo:</strong> <span class="text-white">@Model.FechaInicio.ToString("dd MMM yyyy") – @Model.FechaFin.ToString("dd MMM yyyy")</span></span>
                 <span><strong>Colaboradores inscritos:</strong> <span class="text-white">@registros.Count</span></span>
+                <span><strong>Personas interesadas:</strong> <span class="text-white">@Model.Intereses.Count</span></span>
             </div>
         </div>
     </header>
@@ -227,6 +224,13 @@
                 <dd class="fw-semibold mb-0">
                     @registros.Count @(registros.Count == 1 ? "colaborador registrado" : "colaboradores registrados")
                 </dd>
+                <dt class="text-muted small text-uppercase mt-3">Personas interesadas</dt>
+                <dd class="fw-semibold mb-0">@Model.Intereses.Count</dd>
+                @if (Model.Cupo.HasValue)
+                {
+                    <dt class="text-muted small text-uppercase mt-3">Cupo máximo</dt>
+                    <dd class="fw-semibold mb-0">@registros.Count de @Model.Cupo</dd>
+                }
             </dl>
 
             @if (Model.Activo && Model.EstadoAprobacion == EstadoAprobacion.Aprobado)
@@ -234,7 +238,21 @@
                 <div class="pt-3 border-top">
                     @if (User.Identity?.IsAuthenticated == true)
                     {
-                        if (estadoRegistroActual == EstadoRegistroProyecto.Aceptado)
+                        <form asp-controller="Proyectos"
+                              asp-action="AlternarInteres"
+                              asp-route-id="@Model.IdProyecto"
+                              method="post"
+                              class="mb-3">
+                            <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                            <button type="submit" class="btn-nexo-heart w-100 justify-content-center @(estaInteresado ? "is-interested" : "")"
+                                    aria-pressed="@estaInteresado">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"></path></svg>
+                                <span>@(estaInteresado ? "Ya me interesa" : "Me interesa")</span>
+                                <span>(@Model.Intereses.Count)</span>
+                            </button>
+                            <small class="form-text text-muted d-block mt-1">Marcar interés no te inscribe ni reserva un lugar.</small>
+                        </form>
+                        if (estaRegistrado)
                         {
                             <div class="btn-nexo-registered w-100 justify-content-center py-2 mb-2">
                                 <span>✓ Ya estás registrado en este proyecto</span>
@@ -249,10 +267,10 @@
                                 </button>
                             </form>
                         }
-                        else if (estadoRegistroActual == EstadoRegistroProyecto.Pendiente)
+                        else if (cupoCompleto)
                         {
-                            <div class="alert alert-info mb-0" role="status">
-                                Tu solicitud está pendiente de revisión por el organizador.
+                            <div class="alert alert-secondary mb-0" role="status">
+                                El proyecto alcanzó su cupo máximo de colaboradores.
                             </div>
                         }
                         else
@@ -263,7 +281,7 @@
                                   method="post">
                                 <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
                                 <button type="submit" class="btn-nexo-primary w-100 justify-content-center py-2">
-                                    <span>@(estadoRegistroActual == EstadoRegistroProyecto.Rechazado ? "Solicitar de nuevo" : "Solicitar unirme al proyecto")</span>
+                                    <span>Registrarme en el proyecto</span>
                                     <span aria-hidden="true">→</span>
                                 </button>
                             </form>
@@ -271,6 +289,13 @@
                     }
                     else
                     {
+                        <a asp-controller="Cuenta"
+                           asp-action="IniciarSesion"
+                           asp-route-returnUrl="@Context.Request.Path"
+                           class="btn-nexo-heart w-100 justify-content-center mb-2">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"></path></svg>
+                            <span>Inicia sesión para marcar interés (@Model.Intereses.Count)</span>
+                        </a>
                         <a asp-controller="Cuenta"
                            asp-action="IniciarSesion"
                            asp-route-returnUrl="@Context.Request.Path"
@@ -283,44 +308,6 @@
             }
         </aside>
     </div>
-
-    @if (puedeRevisarColaboradores && solicitudesColaborador.Count > 0)
-    {
-        <section class="nexo-panel mt-4" aria-labelledby="solicitudes-colaboradores-title">
-            <h2 id="solicitudes-colaboradores-title" class="h5 fw-bold mb-3">Solicitudes para colaborar</h2>
-            <div class="d-flex flex-column gap-3">
-                @foreach (var solicitud in solicitudesColaborador)
-                {
-                    var nombreSolicitante = string.Join(
-                        " ",
-                        new[] { solicitud.Usuario.Nombres, solicitud.Usuario.ApellidoPaterno, solicitud.Usuario.ApellidoMaterno }
-                            .Where(s => !string.IsNullOrWhiteSpace(s)));
-                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 p-3 rounded-3 border">
-                        <div>
-                            <strong>@nombreSolicitante</strong>
-                            <div class="text-muted small">@solicitud.Usuario.Correo</div>
-                            <div class="text-muted small">Solicitud: @solicitud.FechaRegistro.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
-                        </div>
-                        <div class="d-flex flex-wrap gap-2">
-                            <form asp-action="ResolverSolicitudColaborador" method="post" class="d-flex gap-2">
-                                <input type="hidden" name="id" value="@Model.IdProyecto" />
-                                <input type="hidden" name="idRegistroProyecto" value="@solicitud.IdRegistroProyecto" />
-                                <input type="hidden" name="aceptar" value="true" />
-                                <button type="submit" class="btn-nexo-primary py-1 px-3">Aceptar</button>
-                            </form>
-                            <form asp-action="ResolverSolicitudColaborador" method="post" class="d-flex gap-2 align-items-center">
-                                <input type="hidden" name="id" value="@Model.IdProyecto" />
-                                <input type="hidden" name="idRegistroProyecto" value="@solicitud.IdRegistroProyecto" />
-                                <input type="hidden" name="aceptar" value="false" />
-                                <input type="hidden" name="comentario" value="La solicitud no fue aceptada por el organizador." />
-                                <button type="submit" class="btn-nexo-outline py-1 px-3">Rechazar</button>
-                            </form>
-                        </div>
-                    </div>
-                }
-            </div>
-        </section>
-    }
 
     @if (puedeEditar && Model.Activo)
     {

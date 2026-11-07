@@ -677,6 +677,41 @@ main {
   color: #ffffff;
 }
 
+.btn-nexo-heart {
+  background-color: var(--nexo-surface);
+  color: var(--nexo-muted);
+  border: 1px solid var(--nexo-border);
+  border-radius: var(--nexo-radius-pill);
+  padding: 0.42rem 0.8rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  text-decoration: none;
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.btn-nexo-heart svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.btn-nexo-heart:hover,
+.btn-nexo-heart.is-interested {
+  color: #bd354b;
+  border-color: rgba(189, 53, 75, 0.35);
+  background-color: rgba(189, 53, 75, 0.07);
+}
+
+.btn-nexo-heart.is-interested svg {
+  fill: currentColor;
+}
+
 .btn-nexo-registered {
   background-color: var(--nexo-sage);
   color: var(--nexo-forest);

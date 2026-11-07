@@ -24,8 +24,9 @@ public class EditarEventoViewModel
     [Display(Name = "Fecha y hora de fin")]
     public DateTime FechaFin { get; set; }
 
+    [Required(ErrorMessage = "Indica el cupo máximo del evento.")]
     [Range(1, int.MaxValue, ErrorMessage = "El cupo debe ser mayor que cero.")]
-    [Display(Name = "Cupo máximo (opcional)")]
+    [Display(Name = "Cupo máximo")]
     public int? Cupo { get; set; }
 
     [Required(ErrorMessage = "El lugar es obligatorio.")]

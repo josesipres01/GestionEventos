@@ -26,6 +26,7 @@ public class EventosController(
             .AsNoTrackingWithIdentityResolution()
             .Include(evento => evento.Organizador)
             .Include(evento => evento.Registros)
+            .Include(evento => evento.Intereses)
             .Where(evento => evento.Activo && evento.EstadoAprobacion == EstadoAprobacion.Aprobado)
             .OrderBy(evento => evento.FechaHora)
             .ToListAsync();
@@ -36,13 +37,15 @@ public class EventosController(
             .Include(proyecto => proyecto.Creador)
             .Include(proyecto => proyecto.Organizador)
             .Include(proyecto => proyecto.Registros)
+            .Include(proyecto => proyecto.Intereses)
             .Where(proyecto => proyecto.Activo && proyecto.EstadoAprobacion == EstadoAprobacion.Aprobado)
             .OrderByDescending(proyecto => proyecto.FechaPublicacion)
             .ToListAsync();
 
         var eventosRegistradosIds = new HashSet<int>();
         var proyectosRegistradosIds = new HashSet<int>();
-        var proyectosPendientesIds = new HashSet<int>();
+        var eventosInteresadosIds = new HashSet<int>();
+        var proyectosInteresadosIds = new HashSet<int>();
         var notificacionesNoLeidas = new List<Notificacion>();
         var usuarioActualId = 0;
 
@@ -56,12 +59,15 @@ public class EventosController(
 
             proyectosRegistradosIds = proyectos
                 .Where(p => p.Registros.Any(r =>
-                    r.IdUsuario == usuarioId && r.Estado == EstadoRegistroProyecto.Aceptado))
+                    r.IdUsuario == usuarioId && r.Estado != EstadoRegistroProyecto.Rechazado))
                 .Select(p => p.IdProyecto)
                 .ToHashSet();
-            proyectosPendientesIds = proyectos
-                .Where(p => p.Registros.Any(r =>
-                    r.IdUsuario == usuarioId && r.Estado == EstadoRegistroProyecto.Pendiente))
+            eventosInteresadosIds = eventos
+                .Where(e => e.Intereses.Any(interes => interes.IdUsuario == usuarioId))
+                .Select(e => e.IdEvento)
+                .ToHashSet();
+            proyectosInteresadosIds = proyectos
+                .Where(p => p.Intereses.Any(interes => interes.IdUsuario == usuarioId))
                 .Select(p => p.IdProyecto)
                 .ToHashSet();
 
@@ -76,7 +82,8 @@ public class EventosController(
         ViewBag.Proyectos = proyectos;
         ViewBag.EventosRegistradosIds = eventosRegistradosIds;
         ViewBag.ProyectosRegistradosIds = proyectosRegistradosIds;
-        ViewBag.ProyectosPendientesIds = proyectosPendientesIds;
+        ViewBag.EventosInteresadosIds = eventosInteresadosIds;
+        ViewBag.ProyectosInteresadosIds = proyectosInteresadosIds;
         ViewBag.NotificacionesNoLeidas = notificacionesNoLeidas;
         ViewBag.UsuarioActualId = usuarioActualId;
 
@@ -94,6 +101,7 @@ public class EventosController(
             .Include(item => item.Registros)
                 .ThenInclude(registro => registro.Usuario)
                     .ThenInclude(usuario => usuario.Carrera)
+            .Include(item => item.Intereses)
             .FirstOrDefaultAsync(item => item.IdEvento == id);
 
         if (evento is null)
@@ -132,6 +140,8 @@ public class EventosController(
         }
 
         ViewBag.EstaRegistrado = registroActual is not null;
+        ViewBag.EstaInteresado = int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioInteresadoId) &&
+            evento.Intereses.Any(interes => interes.IdUsuario == usuarioInteresadoId);
         ViewBag.IdRegistroActual = registroActual?.IdRegistro;
         ViewBag.PuedeEditar = puedeEditar;
 
@@ -156,7 +166,9 @@ public class EventosController(
 
         var registrosProyectos = await dbContext.RegistrosProyectos
             .AsNoTrackingWithIdentityResolution()
-            .Where(registro => registro.IdUsuario == usuarioId)
+            .Where(registro =>
+                registro.IdUsuario == usuarioId &&
+                registro.Estado != EstadoRegistroProyecto.Rechazado)
             .Include(registro => registro.Proyecto)
                 .ThenInclude(proyecto => proyecto.Carrera)
             .Include(registro => registro.Proyecto)
@@ -459,10 +471,12 @@ public class EventosController(
             return View(modelo);
         }
 
+        var estabaAprobado = evento.EstadoAprobacion == EstadoAprobacion.Aprobado;
         // Detectar cambios para informar a los usuarios registrados
         var nuevoNombre = modelo.Nombre.Trim();
         var nuevaDescripcion = modelo.Descripcion.Trim();
         var nuevoLugar = modelo.Lugar.Trim();
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var registrosExistentes = await dbContext.Registros
             .CountAsync(registro => registro.IdEvento == evento.IdEvento);
         if (modelo.Cupo.HasValue && modelo.Cupo.Value < registrosExistentes)
@@ -472,6 +486,7 @@ public class EventosController(
 
         if (!ModelState.IsValid)
         {
+            await transaction.RollbackAsync();
             modelo.ImagenUrlActual = evento.ImagenUrl;
             return View(modelo);
         }
@@ -488,15 +503,41 @@ public class EventosController(
         evento.FechaFin = modelo.FechaFin;
         evento.Cupo = modelo.Cupo;
         evento.Lugar = nuevoLugar;
-        evento.EstadoAprobacion = EstadoAprobacion.Pendiente;
-        evento.ComentarioAprobacion = null;
-        evento.FechaRevision = null;
-        evento.IdUsuarioRevisor = null;
-        evento.FechaSolicitud = DateTime.UtcNow;
+        if (estabaAprobado)
+        {
+            var usuariosRegistrados = await dbContext.Registros
+                .AsNoTracking()
+                .Where(registro => registro.IdEvento == evento.IdEvento)
+                .Select(registro => registro.IdUsuario)
+                .Distinct()
+                .ToListAsync();
+            foreach (var idUsuario in usuariosRegistrados)
+            {
+                dbContext.Notificaciones.Add(new Notificacion
+                {
+                    IdUsuario = idUsuario,
+                    IdEvento = evento.IdEvento,
+                    Titulo = $"El evento «{evento.Nombre}» fue actualizado",
+                    Mensaje = "El organizador actualizó la información del evento. Consulta la publicación para ver los cambios.",
+                    FechaCreacion = DateTime.UtcNow
+                });
+            }
+        }
+        else
+        {
+            evento.EstadoAprobacion = EstadoAprobacion.Pendiente;
+            evento.ComentarioAprobacion = null;
+            evento.FechaRevision = null;
+            evento.IdUsuarioRevisor = null;
+            evento.FechaSolicitud = DateTime.UtcNow;
+        }
 
         await dbContext.SaveChangesAsync();
+        await transaction.CommitAsync();
 
-        TempData["Mensaje"] = "Los cambios se enviaron al organizador para su aprobación.";
+        TempData["Mensaje"] = estabaAprobado
+            ? "Los cambios se guardaron y se notificó a las personas registradas."
+            : "Los cambios se enviaron al organizador para su aprobación.";
 
         return RedirectToAction(nameof(Detalle), new { id = evento.IdEvento });
     }
@@ -613,6 +654,59 @@ public class EventosController(
         {
             TempData["Mensaje"] = "Ya estás registrado en este evento.";
         }
+
+        if (Url.IsLocalUrl(returnUrl))
+        {
+            return Redirect(returnUrl!);
+        }
+
+        return RedirectToAction(nameof(Detalle), new { id });
+    }
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AlternarInteres(int id, string? returnUrl = null)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
+        {
+            return Challenge();
+        }
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var evento = await dbContext.Eventos
+            .AsNoTracking()
+            .FirstOrDefaultAsync(item =>
+                item.IdEvento == id &&
+                item.Activo &&
+                item.EstadoAprobacion == EstadoAprobacion.Aprobado);
+        if (evento is null)
+        {
+            return NotFound();
+        }
+
+        var interes = await dbContext.InteresesEventos
+            .FirstOrDefaultAsync(item => item.IdUsuario == usuarioId && item.IdEvento == id);
+        var marcado = interes is null;
+        if (interes is null)
+        {
+            dbContext.InteresesEventos.Add(new InteresEvento
+            {
+                IdUsuario = usuarioId,
+                IdEvento = id,
+                FechaInteres = DateTime.UtcNow
+            });
+        }
+        else
+        {
+            dbContext.InteresesEventos.Remove(interes);
+        }
+
+        await dbContext.SaveChangesAsync();
+        await transaction.CommitAsync();
+        TempData["Mensaje"] = marcado
+            ? "Marcaste que te interesa este evento. Esto no es una inscripción."
+            : "Quitaste este evento de tus intereses.";
 
         if (Url.IsLocalUrl(returnUrl))
         {

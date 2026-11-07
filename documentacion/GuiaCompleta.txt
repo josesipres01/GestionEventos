@@ -1,0 +1,474 @@
+GESTION DE EVENTOS UNIVERSITARIOS
+DOCUMENTACION GENERAL DEL PROYECTO Y LA BASE DE DATOS
+
+======================================================================
+1. DESCRIPCION
+======================================================================
+
+Gestion de Eventos es una aplicacion web para que una comunidad
+universitaria publique, administre y consulte eventos y proyectos
+academicos. Los usuarios pueden mostrar interes en una publicacion sin
+inscribirse, o inscribirse directamente a eventos y proyectos aprobados.
+El interes y la inscripcion se guardan por separado y se consultan como
+participaciones distintas.
+
+La aplicacion esta desarrollada con ASP.NET Core MVC y C#. Las vistas
+usan Razor. La persistencia se implementa con Entity Framework Core y
+Microsoft SQL Server. La interfaz y los mensajes de la aplicacion estan
+en espanol.
+
+======================================================================
+2. FUNCIONALIDADES
+======================================================================
+
+- Registro de cuentas e inicio y cierre de sesion.
+- Contraseñas almacenadas como hashes mediante el hasher de ASP.NET Core.
+- Exploracion y detalle de eventos y proyectos publicados.
+- Creacion y edicion de eventos y proyectos de acuerdo con permisos y
+  estados de aprobacion.
+- Inscripcion directa de usuarios a eventos y proyectos, limitada por
+  el cupo maximo definido al crear la publicacion.
+- Marcar y quitar interes en eventos y proyectos sin inscribirse. Esta
+  accion no consume cupo ni agrega a la persona a la lista de asistentes
+  o colaboradores.
+- Solicitudes de aprobacion del organizador responsable al crear
+  eventos y proyectos; los registros de participantes no requieren
+  aprobacion.
+- Consulta y cancelacion de participaciones y consulta de notificaciones.
+- Administracion de cuentas, carreras y publicaciones.
+- Baja y solicitud de reactivacion de publicaciones, con datos de
+  auditoria.
+- Pagina de recurso no encontrado para rutas invalidas o recursos no
+  disponibles; la respuesta conserva el codigo HTTP 404.
+
+======================================================================
+3. ROLES Y PERMISOS
+======================================================================
+
+ESTUDIANTE
+- Puede consultar publicaciones disponibles.
+- Puede mostrar o quitar interes en eventos y proyectos aprobados, sin
+  que esta accion lo inscriba.
+- Puede inscribirse directamente a eventos y proyectos disponibles,
+  hasta alcanzar su cupo.
+- Puede revisar sus registros y notificaciones.
+
+ORGANIZADOR / DOCENTE
+- Puede administrar las publicaciones que le corresponden.
+- Puede aprobar las propuestas de eventos y proyectos que le envian.
+
+ADMINISTRADOR
+- Puede administrar usuarios, carreras y publicaciones.
+
+Las cuentas nuevas se asignan al rol de estudiante. Las acciones
+protegidas requieren autenticacion y las acciones administrativas
+verifican el rol correspondiente. La autenticacion usa cookies.
+
+======================================================================
+4. ARQUITECTURA Y ESTRUCTURA DEL REPOSITORIO
+======================================================================
+
+Controllers/
+  Acciones MVC, autorizacion y coordinacion de los flujos de la
+  aplicacion.
+
+Models/
+  Entidades persistidas, estados de aprobacion y contratos compartidos.
+
+ViewModels/
+  Datos y validaciones usados por los formularios.
+
+Data/
+  GestionEventosDbContext, inicializacion y migraciones de EF Core.
+
+Data/Migrations/
+  Fuente versionada de los cambios al esquema de la base de datos.
+
+Views/
+  Vistas Razor para las pantallas.
+
+wwwroot/
+  Archivos estaticos como CSS, JavaScript e imagenes.
+
+tests/GestionEventos.Tests/
+  Pruebas automatizadas de flujos principales.
+
+.github/workflows/dotnet.yml
+  Compilacion y pruebas automatizadas en GitHub Actions.
+
+documentacion/
+  Guia funcional, scripts de semillas y documentacion del sistema.
+
+La aplicacion usa GestionEventosDbContext directamente desde sus
+controladores para consultar y guardar informacion con EF Core; no hay
+una capa independiente de repositorios. El catalogo de carreras usa
+cache en memoria con expiracion absoluta de diez minutos.
+
+======================================================================
+5. MODELO DE DATOS
+======================================================================
+
+La base de datos tiene diez tablas principales. Los nombres fisicos
+estan en mayusculas y las entidades correspondientes estan en Models/.
+Las claves primarias son identificadores enteros, salvo indicacion
+contraria.
+
+ROLES
+- IdRol: clave primaria.
+- Nombre: nombre del rol; unico.
+- Relacion: un rol puede estar asociado a muchos usuarios.
+- Datos iniciales previstos: Estudiante, Organizador/Docente y
+  Administrador.
+
+CARRERAS
+- IdCarrera: clave primaria.
+- Nombre: nombre de la carrera; unico.
+- Relacion: una carrera puede estar asociada a muchos usuarios y
+  proyectos.
+- El identificador de carrera de un usuario es opcional; el de un
+  proyecto es obligatorio.
+
+USUARIOS
+- IdUsuario: clave primaria.
+- Nombres, ApellidoPaterno y ApellidoMaterno: datos del nombre.
+- Correo: obligatorio y unico.
+- PasswordHash: hash de la contraseña; no se almacena la contraseña en
+  texto claro.
+- IdRol: clave foranea obligatoria a ROLES.
+- IdCarrera: clave foranea opcional a CARRERAS.
+- Activo: indicador de cuenta habilitada.
+- FechaRegistro: fecha de registro.
+- Las relaciones no borran en cascada. Desactivar una cuenta conserva
+  su historial y permite mantener referencias de auditoria.
+
+EVENTOS
+- IdEvento: clave primaria.
+- Nombre, Descripcion, Lugar e ImagenUrl: informacion de la publicacion.
+- FechaHora y FechaFin: inicio y fin del evento.
+- Cupo: limite opcional; si se establece debe ser mayor que cero.
+- IdUsuarioOrganizador: usuario organizador.
+- IdUsuarioSolicitante: usuario que solicito/publico el evento.
+- EstadoAprobacion: Pendiente, Aprobado o Rechazado.
+- ComentarioAprobacion, FechaRevision e IdUsuarioRevisor: resultado y
+  auditoria de la revision.
+- Activo, MotivoEliminacion, FechaEliminacion e
+  IdUsuarioEliminador: estado de baja y auditoria.
+- ReactivacionSolicitada y FechaSolicitudReactivacion: seguimiento de
+  solicitud de reactivacion.
+- FechaCreacion y FechaSolicitud: fechas de creacion y solicitud.
+- Restricciones: FechaFin debe ser posterior a FechaHora; Cupo debe
+  ser nulo o mayor que cero; EstadoAprobacion solo admite los tres
+  valores definidos.
+- Indices: organizador, solicitante, revisor, eliminador y combinacion
+  Activo/EstadoAprobacion.
+
+PROYECTOS
+- IdProyecto: clave primaria.
+- Nombre, Descripcion, LugarReunion e ImagenUrl: datos de publicacion.
+- FechaInicio y FechaFin: periodo del proyecto.
+- IdUsuarioCreador: usuario que creo el proyecto.
+- IdUsuarioOrganizador: organizador responsable; puede ser nulo.
+- IdCarrera: carrera relacionada.
+- EstadoAprobacion: Pendiente, Aprobado o Rechazado.
+- ComentarioAprobacion, FechaRevision e IdUsuarioRevisor: auditoria de
+  la revision.
+- Activo, MotivoEliminacion, FechaEliminacion e
+  IdUsuarioEliminador: estado de baja y auditoria.
+- ReactivacionSolicitada y FechaSolicitudReactivacion: seguimiento de
+  solicitud de reactivacion.
+- FechaPublicacion y FechaSolicitud: fechas de publicacion y solicitud.
+- La informacion del organizador se obtiene desde USUARIOS; no se
+  duplica su nombre en la tabla.
+- Indices: creador, organizador, carrera, revisor, eliminador y
+  combinacion Activo/EstadoAprobacion.
+
+REGISTROS
+- IdRegistro: clave primaria.
+- IdUsuario e IdEvento: claves foraneas a USUARIOS y EVENTOS.
+- FechaRegistro: fecha de inscripcion.
+- Restriccion unica compuesta: IdUsuario e IdEvento. Impide que el
+  mismo usuario se inscriba mas de una vez al mismo evento.
+
+REGISTROS_PROYECTOS
+- IdRegistroProyecto: clave primaria.
+- IdUsuario e IdProyecto: persona inscrita y proyecto.
+- FechaRegistro: fecha de inscripcion.
+- Estado: las inscripciones nuevas quedan Aceptadas. Los estados
+  Pendiente y Rechazado se conservan para historial y compatibilidad.
+- IdUsuarioRevisor y FechaRevision: auditoria de decisiones historicas;
+  las inscripciones directas no requieren revisor.
+- Restriccion unica compuesta: IdUsuario e IdProyecto.
+- Las personas inscritas directamente cuentan como colaboradores.
+
+INTERESES_EVENTOS
+- IdInteresEvento: clave primaria.
+- IdUsuario e IdEvento: claves foraneas a USUARIOS y EVENTOS.
+- FechaInteres: fecha en que la persona marco interes.
+- Restriccion unica compuesta: IdUsuario e IdEvento; cada persona puede
+  marcar interes una sola vez por evento.
+
+INTERESES_PROYECTOS
+- IdInteresProyecto: clave primaria.
+- IdUsuario e IdProyecto: claves foraneas a USUARIOS y PROYECTOS.
+- FechaInteres: fecha en que la persona marco interes.
+- Restriccion unica compuesta: IdUsuario e IdProyecto; cada persona
+  puede marcar interes una sola vez por proyecto.
+
+NOTIFICACIONES
+- IdNotificacion: clave primaria.
+- IdUsuario: destinatario.
+- IdEvento e IdProyecto: publicacion relacionada; ambas columnas pueden
+  ser nulas para avisos generales. No se permite asignar ambas a la vez.
+- Titulo, Mensaje, FechaCreacion y Leida: contenido, fecha y estado de
+  lectura.
+- Las notificaciones leidas se conservan y se actualiza Leida; leerlas
+  no debe eliminarlas.
+
+RELACIONES Y BORRADO
+- Las claves foraneas hacia usuarios, publicaciones y catalogos usan
+  comportamiento NO ACTION para evitar cascadas que eliminen historial.
+- Las cuentas se desactivan logicamente; no se recomienda borrar
+  usuarios fisicamente.
+- Las bajas de eventos y proyectos se representan con estado y fechas
+  de baja, no eliminando registros de participacion.
+- La baja de un proyecto notifica a su creador y a las personas
+  inscritas.
+
+======================================================================
+6. ESTADOS Y REGLAS DE INTEGRIDAD
+======================================================================
+
+Estado de aprobacion de eventos y proyectos:
+- Pendiente
+- Aprobado
+- Rechazado
+
+Estado historico de registros de proyectos:
+- Pendiente
+- Aceptado
+- Rechazado
+
+Las propuestas de eventos y proyectos quedan Pendientes hasta que el
+organizador responsable las aprueba o rechaza. Una vez aprobados, los
+eventos y proyectos permiten marcar interes sin inscripcion. La accion
+de interes no crea un registro de participacion, no afecta el cupo y no
+aparece en las listas de asistentes o colaboradores. Para participar, la
+persona debe inscribirse por separado. Una vez aprobado un proyecto, la
+persona se inscribe directamente; no se crea una solicitud individual
+al organizador. Las inscripciones nuevas se
+confirman como Aceptadas. Los registros Pendientes existentes se
+migran a Aceptados y los registros Rechazados se conservan como
+historial. Los estados se almacenan como texto, con restricciones CHECK
+en SQL Server. Las restricciones unicas de inscripciones tambien se
+aplican en la base de datos, no solo en la interfaz.
+
+La verificacion de cupo e inscripcion a eventos y proyectos se ejecuta
+dentro de una transaccion serializable para evitar exceder el limite
+cuando hay solicitudes concurrentes. El marcado de interes se guarda en
+tablas separadas, con unicidad por persona y publicacion, y no modifica
+las inscripciones.
+
+Flujo 2.1 - Mostrar interes:
+1. La persona inicia sesion y abre un evento o proyecto aprobado.
+2. Pulsa el boton de corazon "Me interesa". El sistema guarda el interes
+   y actualiza el contador, sin crear una inscripcion ni reservar cupo.
+3. Puede volver a pulsar el boton para quitar su interes.
+
+Flujo 2.2 - Inscribirse a un evento:
+1. La persona inicia sesion y abre el detalle de un evento aprobado.
+2. Pulsa "Inscribirme". El sistema impide registros duplicados y, si el
+   evento tiene un cupo definido, verifica que haya lugar disponible.
+3. El registro queda guardado con su fecha; no requiere aprobacion.
+4. Desde su agenda, la persona consulta o cancela su inscripcion.
+
+Flujo 2.3 - Colaborar en un proyecto:
+1. El estudiante inicia sesion y abre el detalle de un proyecto aprobado.
+2. Pulsa "Inscribirme en el proyecto". La colaboracion queda confirmada
+   directamente como Aceptada; no se envia una solicitud al organizador.
+3. El sistema evita duplicados y verifica que haya cupo disponible. Los
+   proyectos nuevos requieren un cupo definido; proyectos anteriores
+   sin cupo permanecen sin limite hasta que se les asigne uno.
+4. Desde su agenda, el estudiante consulta o cancela su registro.
+   Solo la propuesta del proyecto requiere aprobacion del organizador;
+   editar una publicacion aprobada no inicia otra revision.
+
+======================================================================
+7. BASE DE DATOS, MIGRACIONES Y SEMILLAS
+======================================================================
+
+SQL Server es el motor de base de datos requerido por la aplicacion.
+Las migraciones de Entity Framework Core son la fuente autoritativa del
+esquema. No se debe mantener un segundo DDL manual para crear las tablas.
+
+Data/Migrations incluye:
+- InitialSchema: linea base del esquema de EF Core.
+- ModernizeDataModel: moderniza las tablas existentes, preserva datos,
+  agrega auditoria, estados, restricciones, indices y relaciones.
+- PortableCheckConstraints: mantiene restricciones compatibles con los
+  motores usados por las pruebas.
+- PreventRoleDeleteCascade: evita que borrar un rol elimine usuarios.
+- DirectProjectRegistrationsAndCapacity: agrega cupo a proyectos y
+  convierte los registros pendientes existentes en inscripciones.
+- SeparateUserInterests: agrega tablas independientes de interes para
+  eventos y proyectos, sin modificar las tablas de inscripcion.
+- GestionEventosDbContextModelSnapshot: snapshot del modelo actual.
+
+Al arrancar, Program.cs:
+1. Comprueba si hay una base existente con un esquema legado reconocido.
+2. Si corresponde, registra la migracion inicial como linea base para
+   no recrear las tablas que ya contienen datos.
+3. Ejecuta las migraciones pendientes.
+4. Prepara los roles y carreras de ejemplo de forma idempotente.
+5. Puede crear las cuentas iniciales de administrador y organizador si
+   se proporcionan las credenciales por variables de entorno y esos
+   roles aun no tienen usuarios.
+
+Un esquema parcial no reconocido provoca un error explicito; no se
+intenta modificarlo automaticamente. Haz una copia de seguridad antes
+de aplicar cambios a una base con informacion importante.
+
+documentacion/GestionEventos.sql contiene solo datos de ejemplo para
+ROLES y CARRERAS. No crea tablas ni reemplaza las migraciones. La
+aplicacion tambien prepara esos datos al iniciar, por lo que ejecutar
+el script es opcional.
+
+Comandos habituales desde la raiz del repositorio (PowerShell):
+
+  dotnet tool restore
+  dotnet restore
+  dotnet build GestionEventos.csproj
+  dotnet test tests/GestionEventos.Tests/GestionEventos.Tests.csproj
+
+Consultar el estado de las migraciones:
+
+  dotnet ef migrations list --project GestionEventos.csproj
+  dotnet ef migrations has-pending-model-changes --project GestionEventos.csproj
+
+Crear un script idempotente de migraciones para inspeccion:
+
+  dotnet ef migrations script --idempotent --project GestionEventos.csproj --output migraciones.sql
+
+No ejecutes scripts de migracion contra produccion sin revisar el SQL,
+resguardar los datos y confirmar el destino de la cadena de conexion.
+En produccion, aplica los cambios mediante un proceso controlado de
+despliegue y una cuenta de base de datos con permisos apropiados.
+
+======================================================================
+8. CONFIGURACION LOCAL
+======================================================================
+
+Requisitos:
+- .NET SDK 10.
+- SQL Server accesible desde el equipo o entorno donde se ejecuta la
+  aplicacion.
+- Una base de datos para GestionEventos.
+
+La conexion se lee de ConnectionStrings:GestionEventos. En PowerShell
+se puede definir mediante:
+
+  $env:ConnectionStrings__GestionEventos = "Server=localhost;Database=GestionEventosUnison;Trusted_Connection=True;TrustServerCertificate=True"
+
+La configuracion inicial de cuentas usa estas variables:
+
+  BootstrapUsers__AdminEmail
+  BootstrapUsers__AdminPassword
+  BootstrapUsers__OrganizerEmail
+  BootstrapUsers__OrganizerPassword
+
+Las cuentas iniciales solo se crean si el rol correspondiente no tiene
+usuarios y se proporcionan tanto correo como contraseña. Si se
+configura solo uno de los valores de una cuenta inicial, la inicializacion
+falla explicitamente. Si no se proporcionan, no se crea esa cuenta.
+
+Ejemplo de uso interactivo para una instancia local. No guardes los
+valores reales en el repositorio:
+
+  $env:BootstrapUsers__AdminEmail = "admin@ejemplo.invalid"
+  $env:BootstrapUsers__AdminPassword = [System.Net.NetworkCredential]::new('', (Read-Host 'Contraseña del administrador' -AsSecureString)).Password
+  $env:BootstrapUsers__OrganizerEmail = "organizador@ejemplo.invalid"
+  $env:BootstrapUsers__OrganizerPassword = [System.Net.NetworkCredential]::new('', (Read-Host 'Contraseña del organizador' -AsSecureString)).Password
+
+Pasos de ejecucion:
+1. Clonar el repositorio.
+2. Configurar la cadena de conexion y, si aplica, las cuentas iniciales.
+3. Ejecutar dotnet tool restore, dotnet restore y dotnet build.
+4. Ejecutar dotnet run --project GestionEventos.csproj.
+5. Al primer inicio se aplican las migraciones y se preparan las semillas.
+
+La aplicacion abre por defecto la exploracion de eventos. Las variables
+de entorno configuradas desde una sesion de PowerShell solo duran
+mientras esa sesion exista.
+
+======================================================================
+9. PRUEBAS Y AUTOMATIZACION
+======================================================================
+
+Las pruebas estan en tests/GestionEventos.Tests y usan SQLite en memoria.
+Cubren flujos de permisos y revision de colaboraciones, auditoria y
+notificaciones de baja, inscripciones duplicadas y cupo, e indices y
+relaciones del modelo.
+
+Ejecutar pruebas:
+
+  dotnet test tests/GestionEventos.Tests/GestionEventos.Tests.csproj
+
+Compilar:
+
+  dotnet build GestionEventos.csproj
+
+El workflow .github/workflows/dotnet.yml ejecuta compilacion y pruebas
+en GitHub Actions para cambios enviados y solicitudes de integracion.
+Las pruebas no sustituyen una prueba de migracion sobre una instancia
+real de SQL Server.
+
+======================================================================
+10. SEGURIDAD Y PROTECCION DE DATOS
+======================================================================
+
+- No guardes contraseñas, cadenas de conexion con secretos, archivos
+  .env, certificados, claves privadas ni configuraciones locales en Git.
+- appsettings.example.json es una referencia de configuracion sin
+  credenciales. Los archivos de configuracion local estan excluidos del
+  repositorio.
+- Usa variables de entorno o un administrador de secretos del entorno.
+- Para produccion usa HTTPS, contraseñas robustas y permisos minimos de
+  SQL Server.
+- Las contraseñas se guardan como hashes; nombres, correos e historial
+  de participacion son datos personales.
+- No se identifico almacenamiento de datos medicos ni de tarjetas de
+  pago en el modelo.
+- No se configura cifrado a nivel de campo ni enmascaramiento en la
+  aplicacion. Evalua cifrado en reposo, politicas de acceso, respaldo y
+  retencion segun los requisitos del entorno.
+- Si una credencial se expone, rótala. Eliminarla del ultimo commit no
+  invalida la credencial ni la quita del historial previo.
+
+======================================================================
+11. DOCUMENTACION COMPLEMENTARIA
+======================================================================
+
+README.md
+  Resumen, requisitos, configuracion y comandos rapidos.
+
+documentacion/documentacion.md
+  Guia tecnica y funcional del proyecto.
+
+documentacion/GestionEventos.sql
+  Semillas SQL opcionales para roles y carreras.
+
+.github/modernize/assessment/engines/facts/data-architecture.md
+  Arquitectura de datos, relaciones y diagrama Mermaid.
+
+El modelo relacional tambien puede revisarse en las entidades de Models/
+y en la configuracion de Data/GestionEventosDbContext.cs. Las migraciones
+en Data/Migrations son la referencia final del esquema versionado.
+
+======================================================================
+12. LICENCIA
+======================================================================
+
+El repositorio no especifica una licencia. No debe asumirse permiso de
+redistribucion o reutilizacion hasta que sus titulares incorporen una
+licencia explicita.
+
+FIN DEL DOCUMENTO
