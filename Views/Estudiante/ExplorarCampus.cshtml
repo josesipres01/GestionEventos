@@ -11,6 +11,7 @@
     var usuarioActualId = ViewBag.UsuarioActualId as int? ?? 0;
     var esAdmin = User.IsInRole("Administrador") || User.IsInRole("Admin");
     var totalPublicaciones = eventos.Count + proyectos.Count;
+    var carreras = ViewBag.Carreras as List<Carrera> ?? new List<Carrera>();
 
     string[] imagenesEventos =
     [
@@ -92,7 +93,7 @@
                 <span>AVISOS DE CAMBIOS EN TUS EVENTOS / PROYECTOS (@notificacionesNoLeidas.Count)</span>
             </div>
             <form asp-controller="Eventos" asp-action="MarcarTodasLeidas" method="post" class="m-0">
-                <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
                 <button type="submit" class="btn-nexo-ghost small">Marcar avisos como leídos</button>
             </form>
         </div>
@@ -119,6 +120,10 @@
                                 Ver proyecto →
                             </a>
                         }
+                        <form asp-controller="Eventos" asp-action="MarcarNotificacionLeida" asp-route-id="@notif.IdNotificacion" method="post" class="m-0">
+                            <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                            <button type="submit" class="btn-nexo-ghost small">Entendido</button>
+                        </form>
                     </div>
                 </div>
             }
@@ -146,18 +151,47 @@
         </div>
     </div>
 
+    <div asp-validation-summary="All" class="text-danger small mb-3"></div>
     <div class="nexo-filter-bar">
-        <div class="nexo-filter-pills" role="tablist" aria-label="Filtrar por tipo">
-            <button type="button" class="nexo-pill active" data-nexo-filter="todo">Todo</button>
-            <button type="button" class="nexo-pill" data-nexo-filter="evento">Eventos</button>
-            <button type="button" class="nexo-pill" data-nexo-filter="proyecto">Proyectos</button>
-        </div>
+        <form asp-action="Index" method="get" class="nexo-catalog-filters">
+            <label>
+                <span>Carrera</span>
+                <select name="idCarrera" class="nexo-select">
+                    <option value="">Todas las carreras</option>
+                    @foreach (var carrera in carreras)
+                    {
+                        <option value="@carrera.IdCarrera" selected="@(ViewBag.IdCarreraSeleccionada as int? == carrera.IdCarrera)">
+                            @carrera.Nombre
+                        </option>
+                    }
+                </select>
+            </label>
+            <label>
+                <span>Desde</span>
+                <input type="date" name="fechaDesde" class="nexo-input" value="@ViewBag.FechaDesde" />
+            </label>
+            <label>
+                <span>Hasta</span>
+                <input type="date" name="fechaHasta" class="nexo-input" value="@ViewBag.FechaHasta" />
+            </label>
+            <div class="d-flex align-items-center gap-2">
+                <button type="submit" class="btn-nexo-primary">Aplicar filtros</button>
+                <a asp-action="Index" class="btn-nexo-outline">Limpiar</a>
+            </div>
+        </form>
 
-        <div class="nexo-count-label"
-             data-nexo-counter
-             data-singular="publicación"
-             data-plural="publicaciones">
-            @totalPublicaciones @(totalPublicaciones == 1 ? "publicación" : "publicaciones")
+        <div class="nexo-filter-toolbar">
+            <div class="nexo-filter-pills" role="group" aria-label="Filtrar por tipo">
+                <button type="button" class="nexo-pill active" data-nexo-filter="todo" aria-pressed="true">Todo</button>
+                <button type="button" class="nexo-pill" data-nexo-filter="evento" aria-pressed="false">Eventos</button>
+                <button type="button" class="nexo-pill" data-nexo-filter="proyecto" aria-pressed="false">Proyectos</button>
+            </div>
+            <div class="nexo-count-label"
+                 data-nexo-counter
+                 data-singular="publicación"
+                 data-plural="publicaciones">
+                @totalPublicaciones @(totalPublicaciones == 1 ? "publicación" : "publicaciones")
+            </div>
         </div>
     </div>
 
@@ -227,7 +261,7 @@
                             @if (evento.Cupo.HasValue)
                             {
                                 <span class="nexo-meta-item" title="Cupo máximo">
-                                    <span>Cupo @totalInscritosEvento/@evento.Cupo</span>
+                                    <span>Cupo máx: @evento.Cupo</span>
                                 </span>
                             }
 
@@ -260,7 +294,7 @@
                                 @if (User.Identity?.IsAuthenticated == true)
                                 {
                                     <form asp-controller="Eventos" asp-action="AlternarInteres" asp-route-id="@evento.IdEvento" method="post" class="m-0">
-                                        <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                                        <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
                                         <button type="submit"
                                                 class="btn-nexo-heart @(estaInteresado ? "is-interested" : "")"
                                                 aria-label="@(estaInteresado ? "Quitar de mis intereses" : "Marcar que me interesa")"
@@ -301,7 +335,7 @@
                                     else
                                     {
                                         <form asp-controller="Eventos" asp-action="RegistrarInteres" asp-route-id="@evento.IdEvento" method="post" class="m-0">
-                                            <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                                            <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
                                             <button type="submit" class="btn-nexo-interest">
                                                 <span>Inscribirme</span>
                                             </button>
@@ -392,7 +426,7 @@
                             @if (proyecto.Cupo.HasValue)
                             {
                                 <span class="nexo-meta-item" title="Cupo máximo de colaboradores">
-                                    <span>Cupo @totalColaboradores/@proyecto.Cupo</span>
+                                    <span>Cupo máx: @proyecto.Cupo</span>
                                 </span>
                             }
                         </div>
@@ -407,7 +441,7 @@
                                 @if (User.Identity?.IsAuthenticated == true)
                                 {
                                     <form asp-controller="Proyectos" asp-action="AlternarInteres" asp-route-id="@proyecto.IdProyecto" method="post" class="m-0">
-                                        <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                                        <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
                                         <button type="submit"
                                                 class="btn-nexo-heart @(estaInteresadoProyecto ? "is-interested" : "")"
                                                 aria-label="@(estaInteresadoProyecto ? "Quitar de mis intereses" : "Marcar que me interesa")"
@@ -448,7 +482,7 @@
                                     else
                                     {
                                         <form asp-controller="Proyectos" asp-action="RegistrarInteres" asp-route-id="@proyecto.IdProyecto" method="post" class="m-0">
-                                            <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                                            <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
                                             <button type="submit" class="btn-nexo-interest">
                                                 <span>Inscribirme</span>
                                             </button>

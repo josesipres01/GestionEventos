@@ -1,0 +1,375 @@
+@model ListaAsistenciaViewModel
+@{
+    ViewData["Title"] = $"Control de Participación — {Model.Evento.Nombre}";
+    var evento = Model.Evento;
+    var organizadorNombre = evento.Organizador is not null
+        ? $"{evento.Organizador.Nombres} {evento.Organizador.ApellidoPaterno}".Trim()
+        : "Organizador";
+    var totalAsistieron = Model.Participantes.Count(participante => participante.Asistio);
+    var puedePasarLista = DateTime.Today >= evento.FechaHora.Date;
+    var usuariosDisponibles = ViewBag.UsuariosDisponibles as Microsoft.AspNetCore.Mvc.Rendering.SelectList;
+}
+
+<section class="nexo-section">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        @if (User.IsInRole("Organizador") || User.IsInRole("Organizador/Docente") || User.IsInRole("Administrador") || User.IsInRole("Admin"))
+        {
+            <a asp-action="MisEventos" class="btn-nexo-outline">← Volver al Panel Organizador</a>
+        }
+        else
+        {
+            <a asp-controller="Solicitudes" asp-action="Index" class="btn-nexo-outline">← Volver a Mis Solicitudes</a>
+        }
+        <div class="d-flex flex-wrap gap-2">
+            <a asp-action="Editar" asp-route-id="@evento.IdEvento" class="btn-nexo-outline">✎ Editar evento</a>
+            <a asp-action="Detalle" asp-route-id="@evento.IdEvento" class="btn-nexo-primary">Ver página del evento →</a>
+        </div>
+    </div>
+
+    @if (TempData["Mensaje"] is string mensaje)
+    {
+        <div class="nexo-toast mb-3" role="status">
+            <span class="nexo-toast-dot">✓</span>
+            <span>@mensaje</span>
+        </div>
+    }
+
+    <div class="nexo-panel mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <div class="nexo-eyebrow mb-0">
+                <span class="nexo-eyebrow-dot"></span>
+                <span>REGISTRO DE PARTICIPACIÓN Y ASISTENCIA · EVENTO UNIVERSITARIO</span>
+            </div>
+            @if (puedePasarLista)
+            {
+                <span class="badge text-bg-success px-3 py-2">
+                    ✓ Pase de participación habilitado (desde @evento.FechaHora.ToString("dd/MM/yyyy"))
+                </span>
+            }
+            else
+            {
+                <span class="badge text-bg-warning px-3 py-2">
+                    ⏳ Pase de participación disponible el @evento.FechaHora.ToString("dd/MM/yyyy")
+                </span>
+            }
+        </div>
+
+        <div class="nexo-catalog-header">
+            <div>
+                <h1 class="nexo-section-title">@evento.Nombre</h1>
+                <p class="text-muted mt-2 mb-0">
+                    <strong>Fecha:</strong> @evento.FechaHora.ToString("dd MMM yyyy · HH:mm") – @evento.FechaFin.ToString("dd MMM yyyy · HH:mm") &nbsp;|&nbsp;
+                    <strong>Lugar:</strong> @evento.Lugar &nbsp;|&nbsp;
+                    <strong>Organiza:</strong> @organizadorNombre
+                </p>
+            </div>
+
+            @if (Model.Participantes.Count > 0)
+            {
+                <div class="nexo-search-box" style="min-width: 260px;">
+                    <span class="nexo-search-icon" aria-hidden="true">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    </span>
+                    <input type="search"
+                           class="nexo-search-input"
+                           placeholder="Buscar por nombre, correo o carrera..."
+                           aria-label="Buscar participante"
+                           data-nexo-search />
+                </div>
+            }
+        </div>
+
+        <!-- Tarjetas de métricas de participación -->
+        <div class="row g-3 mt-3 mb-4">
+            <div class="col-md-4">
+                <div class="p-3 rounded-4 border bg-light h-100">
+                    <div class="text-muted small text-uppercase fw-bold">Personas en la Lista</div>
+                    <div class="h3 fw-bold mb-0 mt-1" style="color: var(--nexo-ink);">@Model.Participantes.Count</div>
+                    <div class="text-muted small mt-1">Inscritos o interesados en el evento</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 rounded-4 border bg-light h-100">
+                    <div class="text-muted small text-uppercase fw-bold">Participación Acreditada</div>
+                    <div class="h3 fw-bold mb-0 mt-1" style="color: var(--nexo-teal);">@totalAsistieron</div>
+                    <div class="text-muted small mt-1">Participación confirmada en el evento</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 rounded-4 border bg-light h-100">
+                    <div class="text-muted small text-uppercase fw-bold">Pendientes por Validar</div>
+                    <div class="h3 fw-bold mb-0 mt-1" style="color: var(--nexo-amber);">@(Math.Max(0, Model.Participantes.Count - totalAsistieron))</div>
+                    <div class="text-muted small mt-1">En espera de pase de lista</div>
+                </div>
+            </div>
+        </div>
+
+        @if (!puedePasarLista)
+        {
+            <div class="alert alert-warning mb-4" role="status">
+                <strong>El pase de participación aún no está habilitado.</strong>
+                Podrás acreditar la asistencia de los participantes a partir del mismo día de inicio del evento (<strong>@evento.FechaHora.ToString("dddd, dd 'de' MMMM 'de' yyyy")</strong>). Por ahora puedes consultar quiénes ya se encuentran inscritos o interesados.
+            </div>
+        }
+        else
+        {
+            <!-- Agregar participante directamente (buscador rápido en tiempo real) -->
+            <div class="p-3 rounded-4 border mb-4" style="background-color: var(--nexo-ivory);">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <div>
+                        <div class="fw-bold">¿Asistió alguien que no alcanzó a registrarse previamente?</div>
+                        <div class="text-muted small">
+                            Escribe su nombre, apellido o correo institucional para buscarlo rápidamente y acreditar su asistencia.
+                        </div>
+                    </div>
+
+                    @if (usuariosDisponibles is not null && usuariosDisponibles.Any())
+                    {
+                        <form asp-action="AgregarParticipanteAsistencia"
+                              asp-route-id="@evento.IdEvento"
+                              method="post"
+                              class="d-flex flex-wrap align-items-center gap-2 flex-grow-1 justify-content-end"
+                              data-user-picker-form>
+                            <input type="hidden" name="idUsuario" value="" data-user-picker-id />
+
+                            <div class="position-relative flex-grow-1" style="min-width: 290px; max-width: 460px;" data-user-picker>
+                                <div class="nexo-search-box w-100" style="background-color: #fff;">
+                                    <span class="nexo-search-icon" aria-hidden="true">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="11" cy="11" r="8"></circle>
+                                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                        </svg>
+                                    </span>
+                                    <input type="search"
+                                           name="busquedaUsuario"
+                                           class="nexo-search-input w-100"
+                                           placeholder="Escribir nombre, correo o carrera para buscar..."
+                                           autocomplete="off"
+                                           required
+                                           aria-label="Buscar estudiante o usuario para agregar"
+                                           data-user-picker-input />
+                                </div>
+
+                                <div class="shadow-sm rounded-4 border bg-white position-absolute w-100 mt-1 overflow-auto"
+                                     style="display: none; max-height: 250px; z-index: 1050;"
+                                     data-user-picker-menu>
+                                    @foreach (var item in usuariosDisponibles)
+                                    {
+                                        <button type="button"
+                                                class="w-100 text-start px-3 py-2 border-0 border-bottom bg-transparent small d-block"
+                                                style="cursor: pointer;"
+                                                data-user-picker-option
+                                                data-user-id="@item.Value"
+                                                data-user-label="@item.Text">
+                                            @item.Text
+                                        </button>
+                                    }
+                                    <div class="px-3 py-2 text-muted small" style="display: none;" data-user-picker-empty>
+                                        No se encontraron coincidencias con tu búsqueda.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn-nexo-primary">
+                                + Agregar y acreditar asistencia
+                            </button>
+                        </form>
+                    }
+                    else
+                    {
+                        <span class="badge text-bg-secondary">Todos los usuarios activos ya están en la lista</span>
+                    }
+                </div>
+            </div>
+        }
+
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 my-3">
+            <span class="fw-bold">Personas interesadas o inscritas</span>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                @if (Model.Participantes.Count > 0 && puedePasarLista)
+                {
+                    <button type="button"
+                            class="btn-nexo-outline py-1 px-3 small"
+                            onclick="document.querySelectorAll('input[name=usuariosAsistieron]').forEach(cb => cb.checked = true);">
+                        Marcar todos
+                    </button>
+                    <button type="button"
+                            class="btn-nexo-outline py-1 px-3 small"
+                            onclick="document.querySelectorAll('input[name=usuariosAsistieron]').forEach(cb => cb.checked = false);">
+                        Desmarcar todos
+                    </button>
+                }
+                <span class="nexo-count-label">
+                    @totalAsistieron de @Model.Participantes.Count @(Model.Participantes.Count == 1 ? "persona acreditada" : "personas acreditadas")
+                </span>
+            </div>
+        </div>
+
+        @if (Model.Participantes.Count == 0)
+        {
+            <div class="nexo-empty py-4">
+                <h2 class="h5 fw-bold mb-1">Aún no hay personas interesadas ni inscritas</h2>
+                <p class="text-muted small mb-0">
+                    Cuando alguien marque su interés o se inscriba aparecerá aquí, o bien puedes agregar asistentes arriba con <strong>“+ Agregar y acreditar asistencia”</strong>.
+                </p>
+            </div>
+        }
+        else
+        {
+            <form asp-action="RegistrarAsistencia" asp-route-id="@evento.IdEvento" method="post">
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr class="text-muted small text-uppercase">
+                                <th>#</th>
+                                <th>Participante</th>
+                                <th>Correo institucional</th>
+                                <th>Carrera</th>
+                                <th>Registro</th>
+                                <th>Estado de participación</th>
+                                <th class="text-center">Asistió / Participó</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{
+                                var numero = 1;
+                            }
+                            @foreach (var participante in Model.Participantes)
+                            {
+                                var palabras = $"{participante.NombreCompleto} {participante.Correo} {participante.Carrera}";
+                                var origen = participante.Inscrito && participante.Interesado
+                                    ? "Inscrito e interesado"
+                                    : participante.Inscrito
+                                        ? "Inscrito"
+                                        : "Interesado";
+
+                                <tr data-nexo-item
+                                    data-nexo-type="todo"
+                                    data-nexo-keywords="@palabras">
+                                    <td class="text-muted fw-bold">@numero.ToString("D2")</td>
+                                    <td class="fw-semibold">@participante.NombreCompleto</td>
+                                    <td class="text-muted">@participante.Correo</td>
+                                    <td>@participante.Carrera</td>
+                                    <td><span class="badge text-bg-light">@origen</span></td>
+                                    <td>
+                                        @if (participante.Asistio)
+                                        {
+                                            <span class="badge text-bg-success">
+                                                ✓ Participación acreditada
+                                                @if (participante.FechaAcreditacion.HasValue)
+                                                {
+                                                    <span>· @participante.FechaAcreditacion.Value.ToLocalTime().ToString("dd/MM/yyyy")</span>
+                                                }
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge text-bg-secondary">Sin acreditar</span>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               style="width: 1.25rem; height: 1.25rem; cursor: pointer;"
+                                               name="usuariosAsistieron"
+                                               value="@participante.IdUsuario"
+                                               checked="@(participante.Asistio ? "checked" : null)"
+                                               disabled="@(!puedePasarLista ? "disabled" : null)"
+                                               aria-label="Marcar asistencia de @participante.NombreCompleto" />
+                                    </td>
+                                </tr>
+                                numero++;
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (puedePasarLista)
+                {
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-4 pt-3 border-top">
+                        <div class="nexo-empty py-2 px-3">
+                            <span class="text-muted small">Marca la casilla de quienes participaron en el evento y guarda los cambios.</span>
+                        </div>
+                        <button type="submit" class="btn-nexo-primary">✓ Guardar registro de participación</button>
+                    </div>
+                }
+
+                <div class="nexo-empty mt-3 py-3" data-nexo-empty-filter style="display: none;">
+                    <p class="text-muted small mb-0">Ninguna persona coincide con tu búsqueda.</p>
+                </div>
+            </form>
+        }
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        (() => {
+            document.querySelectorAll("[data-user-picker-form]").forEach(form => {
+                const input = form.querySelector("[data-user-picker-input]");
+                const hiddenId = form.querySelector("[data-user-picker-id]");
+                const menu = form.querySelector("[data-user-picker-menu]");
+                const emptyMsg = form.querySelector("[data-user-picker-empty]");
+                const options = Array.from(form.querySelectorAll("[data-user-picker-option]"));
+
+                if (!input || !hiddenId || !menu) return;
+
+                const normalize = text => (text || "")
+                    .toLowerCase()
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "");
+
+                const indexedOptions = options.map(btn => ({
+                    btn,
+                    id: btn.dataset.userId,
+                    label: btn.dataset.userLabel || "",
+                    search: normalize(btn.dataset.userLabel)
+                }));
+
+                const filterOptions = () => {
+                    const query = normalize(input.value.trim());
+                    let visibleCount = 0;
+                    const maxVisible = 12;
+
+                    indexedOptions.forEach(item => {
+                        const matches = !query || item.search.includes(query);
+                        if (matches && visibleCount < maxVisible) {
+                            item.btn.style.display = "";
+                            visibleCount++;
+                        } else {
+                            item.btn.style.display = "none";
+                        }
+                    });
+
+                    if (emptyMsg) {
+                        emptyMsg.style.display = visibleCount === 0 ? "block" : "none";
+                    }
+                    menu.style.display = "block";
+                };
+
+                input.addEventListener("focus", filterOptions);
+                input.addEventListener("input", () => {
+                    hiddenId.value = "";
+                    filterOptions();
+                });
+
+                indexedOptions.forEach(item => {
+                    item.btn.addEventListener("click", () => {
+                        hiddenId.value = item.id;
+                        input.value = item.label;
+                        menu.style.display = "none";
+                    });
+                });
+
+                document.addEventListener("click", e => {
+                    if (!form.contains(e.target)) {
+                        menu.style.display = "none";
+                    }
+                });
+            });
+        })();
+    </script>
+}

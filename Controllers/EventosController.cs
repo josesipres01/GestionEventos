@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GestionEventos.Controllers;
 
+[Authorize]
 public class EventosController(
     GestionEventosDbContext dbContext,
     IWebHostEnvironment environment) : Controller
@@ -20,25 +21,66 @@ public class EventosController(
 
     private const long TamanoMaximoImagenBytes = 5 * 1024 * 1024; // 5 MB
 
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(int? idCarrera, DateTime? fechaDesde, DateTime? fechaHasta)
     {
-        var eventos = await dbContext.Eventos
+        if (fechaDesde.HasValue && fechaHasta.HasValue && fechaDesde.Value.Date > fechaHasta.Value.Date)
+        {
+            ModelState.AddModelError(nameof(fechaHasta), "La fecha final debe ser igual o posterior a la fecha inicial.");
+        }
+
+        var carreras = await dbContext.Carreras
+            .AsNoTracking()
+            .OrderBy(carrera => carrera.Nombre)
+            .ToListAsync();
+        var filtroCarrera = idCarrera;
+
+        var eventosQuery = dbContext.Eventos
             .AsNoTrackingWithIdentityResolution()
+            .AsSplitQuery()
             .Include(evento => evento.Organizador)
+                .ThenInclude(organizador => organizador.Carrera)
             .Include(evento => evento.Registros)
             .Include(evento => evento.Intereses)
-            .Where(evento => evento.Activo && evento.EstadoAprobacion == EstadoAprobacion.Aprobado)
-            .OrderBy(evento => evento.FechaHora)
-            .ToListAsync();
-
-        var proyectos = await dbContext.Proyectos
+            .Where(evento => evento.Activo && evento.EstadoAprobacion == EstadoAprobacion.Aprobado);
+        var proyectosQuery = dbContext.Proyectos
             .AsNoTrackingWithIdentityResolution()
+            .AsSplitQuery()
             .Include(proyecto => proyecto.Carrera)
             .Include(proyecto => proyecto.Creador)
             .Include(proyecto => proyecto.Organizador)
             .Include(proyecto => proyecto.Registros)
             .Include(proyecto => proyecto.Intereses)
-            .Where(proyecto => proyecto.Activo && proyecto.EstadoAprobacion == EstadoAprobacion.Aprobado)
+            .Where(proyecto => proyecto.Activo && proyecto.EstadoAprobacion == EstadoAprobacion.Aprobado);
+
+        if (filtroCarrera.HasValue)
+        {
+            eventosQuery = eventosQuery.Where(evento => evento.Organizador != null &&
+                evento.Organizador.IdCarrera == filtroCarrera);
+            proyectosQuery = proyectosQuery.Where(proyecto => proyecto.IdCarrera == filtroCarrera);
+        }
+
+        if (!(fechaDesde.HasValue && fechaHasta.HasValue && fechaDesde.Value.Date > fechaHasta.Value.Date))
+        {
+            if (fechaDesde.HasValue)
+            {
+                var desde = fechaDesde.Value.Date;
+                eventosQuery = eventosQuery.Where(evento => evento.FechaHora >= desde);
+                proyectosQuery = proyectosQuery.Where(proyecto => proyecto.FechaFin >= desde);
+            }
+
+            if (fechaHasta.HasValue)
+            {
+                var hasta = fechaHasta.Value.Date.AddDays(1);
+                eventosQuery = eventosQuery.Where(evento => evento.FechaHora < hasta);
+                proyectosQuery = proyectosQuery.Where(proyecto => proyecto.FechaInicio < hasta);
+            }
+        }
+
+        var eventos = await eventosQuery
+            .OrderBy(evento => evento.FechaHora)
+            .ToListAsync();
+
+        var proyectos = await proyectosQuery
             .OrderByDescending(proyecto => proyecto.FechaPublicacion)
             .ToListAsync();
 
@@ -86,8 +128,87 @@ public class EventosController(
         ViewBag.ProyectosInteresadosIds = proyectosInteresadosIds;
         ViewBag.NotificacionesNoLeidas = notificacionesNoLeidas;
         ViewBag.UsuarioActualId = usuarioActualId;
+        ViewBag.Carreras = carreras;
+        ViewBag.IdCarreraSeleccionada = filtroCarrera;
+        ViewBag.FechaDesde = fechaDesde?.ToString("yyyy-MM-dd");
+        ViewBag.FechaHasta = fechaHasta?.ToString("yyyy-MM-dd");
 
-        return View(eventos);
+        return View("~/Views/Estudiante/ExplorarCampus.cshtml", eventos);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Catalogo(int? idCarrera, DateTime? fechaDesde, DateTime? fechaHasta)
+    {
+        if (fechaDesde.HasValue && fechaHasta.HasValue && fechaDesde.Value.Date > fechaHasta.Value.Date)
+        {
+            ModelState.AddModelError(nameof(fechaHasta), "La fecha final debe ser igual o posterior a la fecha inicial.");
+        }
+
+        var usuarioId = int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id)
+            ? id
+            : 0;
+        var usuarioCarreraId = usuarioId == 0
+            ? null
+            : await dbContext.Usuarios
+                .AsNoTracking()
+                .Where(usuario => usuario.IdUsuario == usuarioId)
+                .Select(usuario => usuario.IdCarrera)
+                .FirstOrDefaultAsync();
+        var filtroCarrera = idCarrera == 0 ? null : idCarrera ?? usuarioCarreraId;
+        var carreras = await dbContext.Carreras
+            .AsNoTracking()
+            .OrderBy(carrera => carrera.Nombre)
+            .ToListAsync();
+
+        var eventosQuery = dbContext.Eventos
+            .AsNoTrackingWithIdentityResolution()
+            .AsSplitQuery()
+            .Include(evento => evento.Organizador)
+                .ThenInclude(organizador => organizador.Carrera)
+            .Include(evento => evento.Registros)
+            .Include(evento => evento.Intereses)
+            .Where(evento => evento.Activo && evento.EstadoAprobacion == EstadoAprobacion.Aprobado);
+
+        if (filtroCarrera.HasValue)
+        {
+            eventosQuery = eventosQuery.Where(evento =>
+                evento.Organizador != null && evento.Organizador.IdCarrera == filtroCarrera);
+        }
+
+        if (!(fechaDesde.HasValue && fechaHasta.HasValue && fechaDesde.Value.Date > fechaHasta.Value.Date))
+        {
+            if (fechaDesde.HasValue)
+            {
+                var desde = fechaDesde.Value.Date;
+                eventosQuery = eventosQuery.Where(evento => evento.FechaHora >= desde);
+            }
+
+            if (fechaHasta.HasValue)
+            {
+                var hasta = fechaHasta.Value.Date.AddDays(1);
+                eventosQuery = eventosQuery.Where(evento => evento.FechaHora < hasta);
+            }
+        }
+
+        var eventos = await eventosQuery
+            .OrderBy(evento => evento.FechaHora)
+            .ToListAsync();
+        var eventosRegistradosIds = eventos
+            .Where(evento => evento.Registros.Any(registro => registro.IdUsuario == usuarioId))
+            .Select(evento => evento.IdEvento)
+            .ToHashSet();
+        var eventosInteresadosIds = eventos
+            .Where(evento => evento.Intereses.Any(interes => interes.IdUsuario == usuarioId))
+            .Select(evento => evento.IdEvento)
+            .ToHashSet();
+
+        ViewBag.Carreras = carreras;
+        ViewBag.IdCarreraSeleccionada = filtroCarrera;
+        ViewBag.FechaDesde = fechaDesde?.ToString("yyyy-MM-dd");
+        ViewBag.FechaHasta = fechaHasta?.ToString("yyyy-MM-dd");
+        ViewBag.EventosRegistradosIds = eventosRegistradosIds;
+        ViewBag.EventosInteresadosIds = eventosInteresadosIds;
+        return View("~/Views/Estudiante/CatalogoEventos.cshtml", eventos);
     }
 
     [HttpGet]
@@ -102,11 +223,19 @@ public class EventosController(
                 .ThenInclude(registro => registro.Usuario)
                     .ThenInclude(usuario => usuario.Carrera)
             .Include(item => item.Intereses)
+            .Include(item => item.Asistencias)
             .FirstOrDefaultAsync(item => item.IdEvento == id);
 
         if (evento is null)
         {
             return NotFound();
+        }
+
+        if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioNotificacionId))
+        {
+            await dbContext.Notificaciones
+                .Where(n => n.IdUsuario == usuarioNotificacionId && n.IdEvento == id && !n.Leida)
+                .ExecuteUpdateAsync(update => update.SetProperty(n => n.Leida, true));
         }
 
         if (!evento.Activo)
@@ -133,10 +262,6 @@ public class EventosController(
             puedeEditar = esAdmin ||
                 evento.IdUsuarioOrganizador == usuarioId ||
                 evento.IdUsuarioSolicitante == usuarioId;
-
-            await dbContext.Notificaciones
-                .Where(n => n.IdUsuario == usuarioId && n.IdEvento == id)
-                .ExecuteUpdateAsync(update => update.SetProperty(n => n.Leida, true));
         }
 
         ViewBag.EstaRegistrado = registroActual is not null;
@@ -144,30 +269,35 @@ public class EventosController(
             evento.Intereses.Any(interes => interes.IdUsuario == usuarioInteresadoId);
         ViewBag.IdRegistroActual = registroActual?.IdRegistro;
         ViewBag.PuedeEditar = puedeEditar;
+        ViewBag.IdsConAsistencia = evento.Asistencias.Select(a => a.IdUsuario).ToHashSet();
 
-        return View(evento);
+        return View("~/Views/Estudiante/DetalleEvento.cshtml", evento);
     }
 
     [Authorize]
-    public async Task<IActionResult> MisRegistros()
+    public async Task<IActionResult> MisRegistros(DateTime? fechaDesde, DateTime? fechaHasta)
     {
         if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
         {
             return Challenge();
         }
 
-        var registros = await dbContext.Registros
+        if (fechaDesde.HasValue && fechaHasta.HasValue && fechaDesde.Value.Date > fechaHasta.Value.Date)
+        {
+            ModelState.AddModelError(nameof(fechaHasta), "La fecha final debe ser igual o posterior a la fecha inicial.");
+        }
+
+        var registrosQuery = dbContext.Registros
             .AsNoTrackingWithIdentityResolution()
-            .Where(registro => registro.IdUsuario == usuarioId)
+            .Where(registro => registro.IdUsuario == usuarioId && registro.Evento.Activo)
             .Include(registro => registro.Evento)
                 .ThenInclude(evento => evento.Organizador)
-            .OrderByDescending(registro => registro.FechaRegistro)
-            .ToListAsync();
-
-        var registrosProyectos = await dbContext.RegistrosProyectos
+            .AsQueryable();
+        var registrosProyectosQuery = dbContext.RegistrosProyectos
             .AsNoTrackingWithIdentityResolution()
             .Where(registro =>
                 registro.IdUsuario == usuarioId &&
+                registro.Proyecto.Activo &&
                 registro.Estado != EstadoRegistroProyecto.Rechazado)
             .Include(registro => registro.Proyecto)
                 .ThenInclude(proyecto => proyecto.Carrera)
@@ -175,20 +305,92 @@ public class EventosController(
                 .ThenInclude(proyecto => proyecto.Creador)
             .Include(registro => registro.Proyecto)
                 .ThenInclude(proyecto => proyecto.Organizador)
+            .AsQueryable();
+        var interesesEventosQuery = dbContext.InteresesEventos
+            .AsNoTrackingWithIdentityResolution()
+            .Where(interes => interes.IdUsuario == usuarioId &&
+                interes.Evento.Activo &&
+                interes.Evento.EstadoAprobacion == EstadoAprobacion.Aprobado &&
+                !dbContext.Registros.Any(registro =>
+                    registro.IdEvento == interes.IdEvento && registro.IdUsuario == usuarioId))
+            .Include(interes => interes.Evento)
+                .ThenInclude(evento => evento.Organizador)
+            .Include(interes => interes.Evento)
+                .ThenInclude(evento => evento.Registros)
+            .AsQueryable();
+        var interesesProyectosQuery = dbContext.InteresesProyectos
+            .AsNoTrackingWithIdentityResolution()
+            .Where(interes => interes.IdUsuario == usuarioId &&
+                interes.Proyecto.Activo &&
+                interes.Proyecto.EstadoAprobacion == EstadoAprobacion.Aprobado &&
+                !dbContext.RegistrosProyectos.Any(registro =>
+                    registro.IdProyecto == interes.IdProyecto &&
+                    registro.IdUsuario == usuarioId &&
+                    registro.Estado != EstadoRegistroProyecto.Rechazado))
+            .Include(interes => interes.Proyecto)
+                .ThenInclude(proyecto => proyecto.Carrera)
+            .Include(interes => interes.Proyecto)
+                .ThenInclude(proyecto => proyecto.Creador)
+            .Include(interes => interes.Proyecto)
+                .ThenInclude(proyecto => proyecto.Organizador)
+            .Include(interes => interes.Proyecto)
+                .ThenInclude(proyecto => proyecto.Registros)
+            .AsQueryable();
+
+        if (!(fechaDesde.HasValue && fechaHasta.HasValue && fechaDesde.Value.Date > fechaHasta.Value.Date))
+        {
+            if (fechaDesde.HasValue)
+            {
+                var desde = fechaDesde.Value.Date;
+                registrosQuery = registrosQuery.Where(registro => registro.Evento.FechaHora >= desde);
+                registrosProyectosQuery = registrosProyectosQuery.Where(registro => registro.Proyecto.FechaFin >= desde);
+                interesesEventosQuery = interesesEventosQuery.Where(interes => interes.Evento.FechaHora >= desde);
+                interesesProyectosQuery = interesesProyectosQuery.Where(interes => interes.Proyecto.FechaFin >= desde);
+            }
+
+            if (fechaHasta.HasValue)
+            {
+                var hasta = fechaHasta.Value.Date.AddDays(1);
+                registrosQuery = registrosQuery.Where(registro => registro.Evento.FechaHora < hasta);
+                registrosProyectosQuery = registrosProyectosQuery.Where(registro => registro.Proyecto.FechaInicio < hasta);
+                interesesEventosQuery = interesesEventosQuery.Where(interes => interes.Evento.FechaHora < hasta);
+                interesesProyectosQuery = interesesProyectosQuery.Where(interes => interes.Proyecto.FechaInicio < hasta);
+            }
+        }
+
+        var registros = await registrosQuery
             .OrderByDescending(registro => registro.FechaRegistro)
+            .ToListAsync();
+        var registrosProyectos = await registrosProyectosQuery
+            .OrderByDescending(registro => registro.FechaRegistro)
+            .ToListAsync();
+        var interesesEventos = await interesesEventosQuery
+            .ToListAsync();
+        var interesesProyectos = await interesesProyectosQuery
             .ToListAsync();
 
         var notificaciones = await dbContext.Notificaciones
             .AsNoTracking()
-            .Where(n => n.IdUsuario == usuarioId)
+            .Where(n => n.IdUsuario == usuarioId && !n.Leida)
             .OrderByDescending(n => n.FechaCreacion)
             .Take(20)
             .ToListAsync();
 
-        ViewBag.RegistrosProyectos = registrosProyectos;
-        ViewBag.Notificaciones = notificaciones;
+        var eventosAcreditadosIds = await dbContext.AsistenciasEventos
+            .AsNoTracking()
+            .Where(a => a.IdUsuario == usuarioId)
+            .Select(a => a.IdEvento)
+            .ToHashSetAsync();
 
-        return View(registros);
+        ViewBag.RegistrosProyectos = registrosProyectos;
+        ViewBag.InteresesEventos = interesesEventos;
+        ViewBag.InteresesProyectos = interesesProyectos;
+        ViewBag.Notificaciones = notificaciones;
+        ViewBag.EventosAcreditadosIds = eventosAcreditadosIds;
+        ViewBag.FechaDesde = fechaDesde?.ToString("yyyy-MM-dd");
+        ViewBag.FechaHasta = fechaHasta?.ToString("yyyy-MM-dd");
+
+        return View("~/Views/Estudiante/AgendaPersonal.cshtml", registros);
     }
 
     [Authorize]
@@ -262,19 +464,16 @@ public class EventosController(
         }
 
         var esAdmin = usuarioActual.IdRol == 3 || usuarioActual.Rol.Nombre.Contains("Admin");
-        var consultaEventos = dbContext.Eventos
+        var misEventos = await dbContext.Eventos
             .AsNoTrackingWithIdentityResolution()
+            .AsSplitQuery()
             .Include(e => e.Organizador)
             .Include(e => e.Registros)
-            .Where(e => e.Activo)
-            .AsQueryable();
-
-        if (!esAdmin)
-        {
-            consultaEventos = consultaEventos.Where(e => e.IdUsuarioOrganizador == usuarioId);
-        }
-
-        var misEventos = await consultaEventos
+            .Include(e => e.Intereses)
+            .Include(e => e.Asistencias)
+            .Where(e =>
+                e.IdUsuarioOrganizador == usuarioId ||
+                e.IdUsuarioSolicitante == usuarioId)
             .OrderByDescending(e => e.FechaHora)
             .ToListAsync();
 
@@ -284,9 +483,7 @@ public class EventosController(
             .Include(p => p.Creador)
             .Include(p => p.Organizador)
             .Include(p => p.Registros)
-            .Where(p => p.Activo)
             .Where(p =>
-                esAdmin ||
                 p.IdUsuarioOrganizador == usuarioId ||
                 p.IdUsuarioCreador == usuarioId)
             .OrderByDescending(p => p.FechaPublicacion)
@@ -294,7 +491,8 @@ public class EventosController(
 
         ViewBag.ProyectosACargo = proyectosResponsable;
         ViewBag.EsAdministrador = esAdmin;
-        return View(misEventos);
+        ViewBag.UsuarioActualId = usuarioId;
+        return View("~/Views/Organizador/PanelOrganizador.cshtml", misEventos);
     }
 
     [Authorize]
@@ -306,18 +504,9 @@ public class EventosController(
             return Challenge();
         }
 
-        if (!await EsOrganizadorOAdminAsync())
-        {
-            return RedirectToAction("AccesoDenegado", "Cuenta");
-        }
-
         var evento = await dbContext.Eventos
-            .AsNoTrackingWithIdentityResolution()
-            .AsSplitQuery()
+            .AsNoTracking()
             .Include(e => e.Organizador)
-            .Include(e => e.Registros)
-                .ThenInclude(r => r.Usuario)
-                    .ThenInclude(u => u.Carrera)
             .FirstOrDefaultAsync(e => e.IdEvento == id);
 
         if (evento is null)
@@ -325,7 +514,234 @@ public class EventosController(
             return NotFound();
         }
 
-        return View(evento);
+        if (!await PuedeGestionarEventoAsync(evento, usuarioId))
+        {
+            return RedirectToAction("AccesoDenegado", "Cuenta");
+        }
+
+        var idsInscritos = await dbContext.Registros
+            .AsNoTracking()
+            .Where(registro => registro.IdEvento == id)
+            .Select(registro => registro.IdUsuario)
+            .ToListAsync();
+        var idsInteresados = await dbContext.InteresesEventos
+            .AsNoTracking()
+            .Where(interes => interes.IdEvento == id)
+            .Select(interes => interes.IdUsuario)
+            .ToListAsync();
+        var idsParticipantes = idsInscritos.Concat(idsInteresados).ToHashSet();
+        var usuarios = await dbContext.Usuarios
+            .AsNoTracking()
+            .Include(usuario => usuario.Carrera)
+            .Where(usuario => idsParticipantes.Contains(usuario.IdUsuario))
+            .OrderBy(usuario => usuario.ApellidoPaterno)
+            .ThenBy(usuario => usuario.Nombres)
+            .ToListAsync();
+        var asistencias = await dbContext.AsistenciasEventos
+            .AsNoTracking()
+            .Where(asistencia => asistencia.IdEvento == id && idsParticipantes.Contains(asistencia.IdUsuario))
+            .ToDictionaryAsync(asistencia => asistencia.IdUsuario, asistencia => (DateTime?)asistencia.FechaAsistencia);
+
+        var usuariosDisponibles = await dbContext.Usuarios
+            .AsNoTracking()
+            .Include(u => u.Carrera)
+            .Where(u =>
+                u.Activo &&
+                !idsParticipantes.Contains(u.IdUsuario) &&
+                u.IdUsuario != evento.IdUsuarioOrganizador &&
+                u.IdUsuario != evento.IdUsuarioSolicitante)
+            .OrderBy(u => u.Nombres)
+            .ThenBy(u => u.ApellidoPaterno)
+            .Select(u => new
+            {
+                u.IdUsuario,
+                Etiqueta = $"{u.Nombres} {u.ApellidoPaterno} {u.ApellidoMaterno}".Trim() +
+                           $" — {u.Correo}" +
+                           (u.Carrera != null ? $" ({u.Carrera.Nombre})" : "")
+            })
+            .ToListAsync();
+
+        ViewBag.UsuariosDisponibles = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
+            usuariosDisponibles,
+            "IdUsuario",
+            "Etiqueta");
+
+        var modelo = new ListaAsistenciaViewModel
+        {
+            Evento = evento,
+            Participantes = usuarios.Select(usuario => new ParticipanteAsistenciaViewModel
+            {
+                IdUsuario = usuario.IdUsuario,
+                NombreCompleto = string.Join(" ", new[]
+                {
+                    usuario.Nombres,
+                    usuario.ApellidoPaterno,
+                    usuario.ApellidoMaterno
+                }.Where(nombre => !string.IsNullOrWhiteSpace(nombre))),
+                Correo = usuario.Correo,
+                Carrera = usuario.Carrera?.Nombre ?? "General",
+                Inscrito = idsInscritos.Contains(usuario.IdUsuario),
+                Interesado = idsInteresados.Contains(usuario.IdUsuario),
+                Asistio = asistencias.ContainsKey(usuario.IdUsuario),
+                FechaAcreditacion = asistencias.GetValueOrDefault(usuario.IdUsuario)
+            }).ToList()
+        };
+
+        return View("~/Views/Organizador/ControlAsistenciaEvento.cshtml", modelo);
+    }
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AgregarParticipanteAsistencia(int id, int? idUsuario, string? busquedaUsuario)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioActualId))
+        {
+            return Challenge();
+        }
+
+        var evento = await dbContext.Eventos.FirstOrDefaultAsync(e => e.IdEvento == id);
+        if (evento is null)
+        {
+            return NotFound();
+        }
+
+        if (!await PuedeGestionarEventoAsync(evento, usuarioActualId))
+        {
+            return RedirectToAction("AccesoDenegado", "Cuenta");
+        }
+
+        if (DateTime.Today < evento.FechaHora.Date)
+        {
+            TempData["Mensaje"] = $"El pase de participación estará disponible a partir del día de inicio del evento ({evento.FechaHora:dd/MM/yyyy}).";
+            return RedirectToAction(nameof(Inscritos), new { id });
+        }
+
+        Usuario? usuario = null;
+        if (idUsuario.HasValue && idUsuario.Value > 0)
+        {
+            usuario = await dbContext.Usuarios
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.IdUsuario == idUsuario.Value && u.Activo);
+        }
+
+        if (usuario is null && !string.IsNullOrWhiteSpace(busquedaUsuario))
+        {
+            var termino = busquedaUsuario.Trim();
+            var candidatos = await dbContext.Usuarios
+                .AsNoTracking()
+                .Include(u => u.Carrera)
+                .Where(u =>
+                    u.Activo &&
+                    u.IdUsuario != evento.IdUsuarioOrganizador &&
+                    u.IdUsuario != evento.IdUsuarioSolicitante)
+                .ToListAsync();
+
+            usuario = candidatos.FirstOrDefault(u =>
+                string.Equals(u.Correo, termino, StringComparison.OrdinalIgnoreCase) ||
+                termino.Contains(u.Correo, StringComparison.OrdinalIgnoreCase) ||
+                $"{u.Nombres} {u.ApellidoPaterno} {u.ApellidoMaterno}".Trim().Contains(termino, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (usuario is null)
+        {
+            TempData["Mensaje"] = "No se encontró un usuario activo con ese nombre o correo. Selecciónalo de las sugerencias al escribir.";
+            return RedirectToAction(nameof(Inscritos), new { id });
+        }
+
+        var ahora = DateTime.UtcNow;
+        if (!await dbContext.Registros.AnyAsync(r => r.IdEvento == id && r.IdUsuario == usuario.IdUsuario))
+        {
+            dbContext.Registros.Add(new Registro
+            {
+                IdEvento = id,
+                IdUsuario = usuario.IdUsuario,
+                FechaRegistro = ahora
+            });
+        }
+
+        if (!await dbContext.AsistenciasEventos.AnyAsync(a => a.IdEvento == id && a.IdUsuario == usuario.IdUsuario))
+        {
+            dbContext.AsistenciasEventos.Add(new AsistenciaEvento
+            {
+                IdEvento = id,
+                IdUsuario = usuario.IdUsuario,
+                FechaAsistencia = ahora
+            });
+        }
+
+        await dbContext.SaveChangesAsync();
+        TempData["Mensaje"] = $"Se agregó y acreditó la asistencia de {usuario.Nombres} {usuario.ApellidoPaterno}.";
+        return RedirectToAction(nameof(Inscritos), new { id });
+    }
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RegistrarAsistencia(int id, List<int>? usuariosAsistieron)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
+        {
+            return Challenge();
+        }
+
+        var evento = await dbContext.Eventos
+            .FirstOrDefaultAsync(item => item.IdEvento == id);
+        if (evento is null)
+        {
+            return NotFound();
+        }
+
+        if (!await PuedeGestionarEventoAsync(evento, usuarioId))
+        {
+            return RedirectToAction("AccesoDenegado", "Cuenta");
+        }
+
+        if (DateTime.Today < evento.FechaHora.Date)
+        {
+            TempData["Mensaje"] = $"El pase de participación estará disponible a partir del día de inicio del evento ({evento.FechaHora:dd/MM/yyyy}).";
+            return RedirectToAction(nameof(Inscritos), new { id });
+        }
+
+        var idsParticipantes = await dbContext.Registros
+            .Where(registro => registro.IdEvento == id)
+            .Select(registro => registro.IdUsuario)
+            .Union(dbContext.InteresesEventos
+                .Where(interes => interes.IdEvento == id)
+                .Select(interes => interes.IdUsuario))
+            .ToListAsync();
+        var idsParticipantesSet = idsParticipantes.ToHashSet();
+        var idsQueAsistieron = (usuariosAsistieron ?? new List<int>()).ToHashSet();
+
+        if (!idsQueAsistieron.IsSubsetOf(idsParticipantesSet))
+        {
+            return BadRequest();
+        }
+
+        var asistenciasActuales = await dbContext.AsistenciasEventos
+            .Where(asistencia =>
+                asistencia.IdEvento == id &&
+                idsParticipantesSet.Contains(asistencia.IdUsuario))
+            .ToListAsync();
+        var idsConAsistenciaActual = asistenciasActuales
+            .Select(asistencia => asistencia.IdUsuario)
+            .ToHashSet();
+
+        dbContext.AsistenciasEventos.RemoveRange(
+            asistenciasActuales.Where(asistencia => !idsQueAsistieron.Contains(asistencia.IdUsuario)));
+        dbContext.AsistenciasEventos.AddRange(
+            idsQueAsistieron
+                .Where(idParticipante => !idsConAsistenciaActual.Contains(idParticipante))
+                .Select(idParticipante => new AsistenciaEvento
+                {
+                    IdEvento = id,
+                    IdUsuario = idParticipante,
+                    FechaAsistencia = DateTime.UtcNow
+                }));
+
+        await dbContext.SaveChangesAsync();
+        TempData["Mensaje"] = $"Se guardó la asistencia de {idsQueAsistieron.Count} personas.";
+        return RedirectToAction(nameof(Inscritos), new { id });
     }
 
     [Authorize]
@@ -333,7 +749,7 @@ public class EventosController(
     public async Task<IActionResult> Crear()
     {
         await CargarOrganizadoresAsync();
-        return View(new CrearEventoViewModel());
+        return View("~/Views/Estudiante/PublicarEvento.cshtml", new CrearEventoViewModel());
     }
 
     [Authorize]
@@ -374,7 +790,7 @@ public class EventosController(
         if (!ModelState.IsValid)
         {
             await CargarOrganizadoresAsync();
-            return View(modelo);
+            return View("~/Views/Estudiante/PublicarEvento.cshtml", modelo);
         }
 
         var imagenUrl = await GuardarImagenEventoAsync(modelo.ImagenArchivo);
@@ -396,6 +812,14 @@ public class EventosController(
         };
 
         dbContext.Eventos.Add(nuevoEvento);
+        dbContext.Notificaciones.Add(new Notificacion
+        {
+            IdUsuario = nuevoEvento.IdUsuarioOrganizador,
+            Evento = nuevoEvento,
+            Titulo = $"Nueva solicitud de evento: {nuevoEvento.Nombre}",
+            Mensaje = $"{User.Identity?.Name ?? "Un estudiante"} envió un evento para tu revisión.",
+            FechaCreacion = DateTime.UtcNow
+        });
         await dbContext.SaveChangesAsync();
 
         TempData["Mensaje"] = "Tu solicitud de evento se envió al organizador para su aprobación.";
@@ -423,7 +847,7 @@ public class EventosController(
             return RedirectToAction("AccesoDenegado", "Cuenta");
         }
 
-        return View(new EditarEventoViewModel
+        return View("~/Views/Estudiante/EditarEvento.cshtml", new EditarEventoViewModel
         {
             IdEvento = evento.IdEvento,
             Nombre = evento.Nombre,
@@ -468,7 +892,7 @@ public class EventosController(
         if (!ModelState.IsValid)
         {
             modelo.ImagenUrlActual = evento.ImagenUrl;
-            return View(modelo);
+            return View("~/Views/Estudiante/EditarEvento.cshtml", modelo);
         }
 
         var estabaAprobado = evento.EstadoAprobacion == EstadoAprobacion.Aprobado;
@@ -488,7 +912,7 @@ public class EventosController(
         {
             await transaction.RollbackAsync();
             modelo.ImagenUrlActual = evento.ImagenUrl;
-            return View(modelo);
+            return View("~/Views/Estudiante/EditarEvento.cshtml", modelo);
         }
 
         if (modelo.ImagenArchivo is { Length: > 0 })
@@ -530,6 +954,14 @@ public class EventosController(
             evento.FechaRevision = null;
             evento.IdUsuarioRevisor = null;
             evento.FechaSolicitud = DateTime.UtcNow;
+            dbContext.Notificaciones.Add(new Notificacion
+            {
+                IdUsuario = evento.IdUsuarioOrganizador,
+                IdEvento = evento.IdEvento,
+                Titulo = $"Solicitud de evento actualizada: {evento.Nombre}",
+                Mensaje = $"{User.Identity?.Name ?? "Un estudiante"} actualizó el evento y requiere una nueva revisión.",
+                FechaCreacion = DateTime.UtcNow
+            });
         }
 
         await dbContext.SaveChangesAsync();
@@ -829,6 +1261,24 @@ public class EventosController(
                  usuario.IdRol == 3 ||
                  usuario.Rol.Nombre.Contains("Organizador") ||
                  usuario.Rol.Nombre.Contains("Admin")));
+    }
+
+    private async Task<bool> PuedeGestionarEventoAsync(Evento evento, int usuarioId)
+    {
+        if (evento.IdUsuarioOrganizador == usuarioId || evento.IdUsuarioSolicitante == usuarioId)
+        {
+            return true;
+        }
+
+        return User.IsInRole("Administrador") ||
+            User.IsInRole("Admin") ||
+            await dbContext.Usuarios
+                .AsNoTracking()
+                .Include(usuario => usuario.Rol)
+                .AnyAsync(usuario =>
+                    usuario.IdUsuario == usuarioId &&
+                    usuario.Activo &&
+                    (usuario.IdRol == 3 || usuario.Rol.Nombre.Contains("Admin")));
     }
 
     private async Task CargarOrganizadoresAsync()

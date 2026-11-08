@@ -8,7 +8,7 @@ public class HomeController : Controller
 {
     public IActionResult Index()
     {
-        return RedirectToAction("Index", "Eventos");
+        return RedirectToAction("IniciarSesion", "Cuenta");
     }
 
     public IActionResult Privacy()

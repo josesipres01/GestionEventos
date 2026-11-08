@@ -7,7 +7,7 @@
     <div class="mb-4">
         <div class="nexo-eyebrow">
             <span class="nexo-eyebrow-dot"></span>
-            <span>GESTIÓN DE EVENTOS · ORGANIZADOR</span>
+            <span>GESTIÓN DE EVENTOS</span>
         </div>
         <h1 class="nexo-section-title">Editar información del evento</h1>
         <p class="text-muted mt-2 mb-0">
@@ -86,7 +86,7 @@
                     <span>Guardar cambios</span>
                     <span aria-hidden="true">→</span>
                 </button>
-                <a asp-action="MisEventos" class="btn-nexo-outline">Cancelar</a>
+                <a asp-action="Detalle" asp-route-id="@Model.IdEvento" class="btn-nexo-outline">Cancelar</a>
             </div>
         </form>
     </div>

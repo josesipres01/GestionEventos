@@ -1,0 +1,278 @@
+@model SolicitudesViewModel
+@{
+    ViewData["Title"] = "Bandeja de revisión";
+
+    static string EstadoTexto(EstadoAprobacion estado) => estado switch
+    {
+        EstadoAprobacion.Aprobado => "Aprobada",
+        EstadoAprobacion.Rechazado => "Rechazada",
+        _ => "Pendiente de revisión"
+    };
+
+    static string EstadoClase(EstadoAprobacion estado) => estado switch
+    {
+        EstadoAprobacion.Aprobado => "text-bg-success",
+        EstadoAprobacion.Rechazado => "text-bg-danger",
+        _ => "text-bg-warning"
+    };
+}
+
+<section class="nexo-section">
+    <div class="nexo-catalog-header mb-4">
+        <div>
+            <div class="nexo-eyebrow">
+                <span class="nexo-eyebrow-dot"></span>
+                <span>PANEL DEL ORGANIZADOR · CENTRO DE APROBACIONES</span>
+            </div>
+            <h1 class="nexo-section-title">Bandeja de revisión y aprobaciones</h1>
+            <p class="text-muted mt-2 mb-0">
+                Revisa y dictamina las propuestas de eventos y proyectos enviadas por estudiantes, consulta tus avisos recientes o gestiona bajas.
+            </p>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+            <a asp-controller="Eventos" asp-action="MisEventos" class="btn-nexo-outline">
+                Ir al Panel Organizador
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="nexo-panel p-3 h-100">
+                <div class="text-muted small text-uppercase fw-bold">Pendientes de Revisión</div>
+                <div class="display-6 fw-bold mt-1" style="color: var(--nexo-coral);">@Model.PendientesPorRevisar.Count</div>
+                <div class="text-muted small mt-1">Solicitudes esperando tu dictamen</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="nexo-panel p-3 h-100">
+                <div class="text-muted small text-uppercase fw-bold">Avisos sin Leer</div>
+                <div class="display-6 fw-bold mt-1" style="color: var(--nexo-forest);">@Model.Notificaciones.Count</div>
+                <div class="text-muted small mt-1">Notificaciones recientes de actividad</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="nexo-panel p-3 h-100">
+                <div class="text-muted small text-uppercase fw-bold">Publicaciones en Baja</div>
+                <div class="display-6 fw-bold mt-1" style="color: var(--nexo-teal);">@Model.PublicacionesInactivas.Count</div>
+                <div class="text-muted small mt-1">Ocultas del catálogo público</div>
+            </div>
+        </div>
+    </div>
+
+    @if (TempData["Mensaje"] is string mensaje)
+    {
+        <div class="nexo-toast" role="status">
+            <span class="nexo-toast-dot">✓</span>
+            <span>@mensaje</span>
+        </div>
+    }
+
+    @if (Model.Notificaciones.Any())
+    {
+        <section class="nexo-notice-section" aria-labelledby="solicitudes-notificaciones">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                <div>
+                    <div class="nexo-eyebrow mb-1">
+                        <span class="nexo-eyebrow-dot"></span>
+                        <span>ACTUALIZACIONES</span>
+                    </div>
+                    <h2 id="solicitudes-notificaciones" class="h4 fw-bold mb-0">Notificaciones recientes</h2>
+                </div>
+                @if (Model.Notificaciones.Any(notificacion => !notificacion.Leida))
+                {
+                    <form asp-controller="Eventos" asp-action="MarcarTodasLeidas" method="post" class="m-0">
+                        <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                        <button type="submit" class="btn-nexo-outline">Marcar todas como leídas</button>
+                    </form>
+                }
+            </div>
+            <div class="nexo-request-list">
+                @foreach (var notificacion in Model.Notificaciones)
+                {
+                    <article class="nexo-notice-card @(notificacion.Leida ? "is-read" : "")">
+                        <div>
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                @if (!notificacion.Leida)
+                                {
+                                    <span class="badge text-bg-success">Nueva</span>
+                                }
+                                <strong>@notificacion.Titulo</strong>
+                            </div>
+                            <p class="text-muted mb-1 mt-2">@notificacion.Mensaje</p>
+                            <span class="small text-muted">@notificacion.FechaCreacion.ToLocalTime().ToString("dd MMM yyyy · HH:mm")</span>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            @if (notificacion.IdEvento.HasValue)
+                            {
+                                <a asp-controller="Eventos" asp-action="Detalle" asp-route-id="@notificacion.IdEvento" class="btn-nexo-outline">Ver evento</a>
+                            }
+                            else if (notificacion.IdProyecto.HasValue)
+                            {
+                                <a asp-controller="Proyectos" asp-action="Detalle" asp-route-id="@notificacion.IdProyecto" class="btn-nexo-outline">Ver proyecto</a>
+                            }
+                            @if (!notificacion.Leida)
+                            {
+                                <form asp-controller="Eventos" asp-action="MarcarNotificacionLeida" asp-route-id="@notificacion.IdNotificacion" method="post" class="m-0">
+                                    <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                                    <button type="submit" class="btn-nexo-ghost">Entendido</button>
+                                </form>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        </section>
+    }
+
+    <section class="nexo-request-section">
+        <h2 class="h4 fw-bold mb-3">Solicitudes pendientes de mi dictamen (@Model.PendientesPorRevisar.Count)</h2>
+        @if (!Model.PendientesPorRevisar.Any())
+        {
+            <div class="nexo-empty py-4">
+                <p class="text-muted mb-0">No tienes solicitudes pendientes de aprobación en este momento.</p>
+            </div>
+        }
+        else
+        {
+            <div class="d-flex flex-column gap-3">
+                @foreach (var solicitud in Model.PendientesPorRevisar)
+                {
+                    <article class="nexo-panel nexo-request-card">
+                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                            <div>
+                                <span class="badge text-bg-light mb-2">@solicitud.Tipo</span>
+                                <h3 class="h5 fw-bold mb-1">@solicitud.Nombre</h3>
+                                <p class="text-muted small mb-2">
+                                    Propuesto por <strong>@solicitud.Organizador</strong> · Enviado el @solicitud.FechaEnvio.ToLocalTime().ToString("dd MMM yyyy · HH:mm")
+                                </p>
+                            </div>
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                <a href="@solicitud.UrlDetalle" class="btn-nexo-outline py-1 px-3 small">Ver vista previa →</a>
+                                <span class="badge rounded-pill @EstadoClase(solicitud.Estado)">@EstadoTexto(solicitud.Estado)</span>
+                            </div>
+                        </div>
+
+                        <form asp-action="Resolver@(solicitud.Tipo)" method="post" class="mt-3 pt-3 border-top">
+                            <input type="hidden" name="id" value="@solicitud.Id" />
+                            <label for="comentario-@solicitud.Tipo-@solicitud.Id" class="nexo-label small">
+                                Comentario o retroalimentación para el proponente (obligatorio en caso de rechazo)
+                            </label>
+                            <textarea id="comentario-@solicitud.Tipo-@solicitud.Id"
+                                      name="comentario"
+                                      maxlength="1000"
+                                      class="nexo-textarea mb-3"
+                                      rows="2"
+                                      placeholder="Escribe una observación o retroalimentación..."></textarea>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button type="submit" name="aprobar" value="true" class="btn-nexo-primary">
+                                    ✓ Aprobar y publicar
+                                </button>
+                                <button type="submit" name="aprobar" value="false" class="btn-nexo-danger">
+                                    Rechazar solicitud
+                                </button>
+                            </div>
+                        </form>
+                    </article>
+                }
+            </div>
+        }
+    </section>
+
+    @if (Model.MisSolicitudes.Any())
+    {
+        <section class="nexo-request-section">
+            <h2 class="h4 fw-bold mb-3">Solicitudes enviadas a otros organizadores (@Model.MisSolicitudes.Count)</h2>
+            <div class="nexo-request-list">
+                @foreach (var solicitud in Model.MisSolicitudes)
+                {
+                    <article class="nexo-panel nexo-request-card">
+                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                            <div>
+                                <span class="badge text-bg-light mb-2">@solicitud.Tipo</span>
+                                <h3 class="h5 fw-bold mb-1">@solicitud.Nombre</h3>
+                                <p class="text-muted small mb-2">
+                                    Organizador: @solicitud.Organizador · Enviada @solicitud.FechaEnvio.ToLocalTime().ToString("dd MMM yyyy · HH:mm")
+                                </p>
+                            </div>
+                            <span class="badge rounded-pill @EstadoClase(solicitud.Estado)">@EstadoTexto(solicitud.Estado)</span>
+                        </div>
+
+                        <div class="d-flex flex-wrap align-items-center gap-2 small mt-3">
+                            <span class="badge rounded-pill text-bg-success">1. Solicitud enviada</span>
+                            <span aria-hidden="true">→</span>
+                            @if (solicitud.Estado == EstadoAprobacion.Pendiente)
+                            {
+                                <span class="badge rounded-pill text-bg-warning">2. Esperando revisión</span>
+                            }
+                            else
+                            {
+                                <span class="badge rounded-pill @EstadoClase(solicitud.Estado)">
+                                    2. @EstadoTexto(solicitud.Estado) · @solicitud.FechaRevision?.ToLocalTime().ToString("dd MMM yyyy · HH:mm")
+                                </span>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(solicitud.Comentario))
+                        {
+                            <div class="alert @(solicitud.Estado == EstadoAprobacion.Rechazado ? "alert-danger" : "alert-success") mt-3 mb-0">
+                                <strong>Respuesta del organizador:</strong> @solicitud.Comentario
+                            </div>
+                        }
+                        @if (solicitud.Estado == EstadoAprobacion.Rechazado && solicitud.UrlEdicion is not null)
+                        {
+                            <a href="@solicitud.UrlEdicion" class="btn-nexo-outline mt-3">Editar y volver a enviar</a>
+                        }
+                    </article>
+                }
+            </div>
+        </section>
+    }
+
+    @if (Model.PublicacionesInactivas.Any())
+    {
+        <section class="nexo-request-section">
+            <h2 class="h4 fw-bold mb-3">Publicaciones eliminadas de la vista pública (@Model.PublicacionesInactivas.Count)</h2>
+            <p class="text-muted">
+                Estas publicaciones fueron eliminadas y ya no aparecen en el catálogo. La reactivación debe solicitarla el organizador responsable.
+            </p>
+            <div class="nexo-request-list">
+                @foreach (var publicacion in Model.PublicacionesInactivas)
+                {
+                    <article class="nexo-panel nexo-request-card">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                            <div>
+                                <span class="badge text-bg-light mb-2">@publicacion.Tipo</span>
+                                <h3 class="h5 fw-bold mb-1">@publicacion.Nombre</h3>
+                                <span class="badge text-bg-secondary">Eliminada</span>
+                                @if (!string.IsNullOrWhiteSpace(publicacion.MotivoEliminacion))
+                                {
+                                    <p class="text-muted mb-0 mt-2">
+                                        <strong>Motivo de eliminación:</strong> @publicacion.MotivoEliminacion
+                                    </p>
+                                }
+                                @if (publicacion.ReactivacionSolicitada)
+                                {
+                                    <span class="badge text-bg-warning">Esperando respuesta del administrador</span>
+                                }
+                            </div>
+                            @if ((publicacion.Tipo == "Evento" || publicacion.Tipo == "Proyecto") &&
+                                 publicacion.PuedeSolicitarReactivacion &&
+                                 !publicacion.ReactivacionSolicitada)
+                            {
+                                <form asp-action="SolicitarReactivacion" method="post" class="m-0">
+                                    <input type="hidden" name="tipo" value="@publicacion.Tipo" />
+                                    <input type="hidden" name="id" value="@publicacion.Id" />
+                                    <button type="submit" class="btn-nexo-outline">
+                                        Solicitar reactivación al administrador
+                                    </button>
+                                </form>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        </section>
+    }
+</section>

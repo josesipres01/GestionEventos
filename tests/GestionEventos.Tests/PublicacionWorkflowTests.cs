@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using GestionEventos.ViewModels;
 
 namespace GestionEventos.Tests;
 
@@ -40,6 +41,9 @@ public class PublicacionWorkflowTests
         Assert.Contains(db.Model.FindEntityType(typeof(InteresProyecto))!.GetIndexes(),
             index => index.IsUnique && index.Properties.Select(property => property.Name)
                 .SequenceEqual([nameof(InteresProyecto.IdUsuario), nameof(InteresProyecto.IdProyecto)]));
+        Assert.Contains(db.Model.FindEntityType(typeof(AsistenciaEvento))!.GetIndexes(),
+            index => index.IsUnique && index.Properties.Select(property => property.Name)
+                .SequenceEqual([nameof(AsistenciaEvento.IdUsuario), nameof(AsistenciaEvento.IdEvento)]));
     }
 
     [Fact]
@@ -63,6 +67,87 @@ public class PublicacionWorkflowTests
         Assert.False(project.Activo);
         Assert.Equal(2, project.IdUsuarioEliminador);
         Assert.Equal(new[] { 1, 3, 4 }, await db.Notificaciones.OrderBy(n => n.IdUsuario).Select(n => n.IdUsuario).ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task DeleteProject_DeniesCreatorWhenTheyAreNotTheAssignedResponsible()
+    {
+        await using var connection = await CreateOpenConnectionAsync();
+        await using var db = CreateDbContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await SeedProjectAsync(db);
+
+        var controller = CreateProjectController(db, actorId: 1);
+        var result = Assert.IsType<RedirectToActionResult>(await controller.Eliminar(10, "Motivo de prueba"));
+
+        Assert.Equal("AccesoDenegado", result.ActionName);
+        Assert.True((await db.Proyectos.SingleAsync(proyecto => proyecto.IdProyecto == 10)).Activo);
+    }
+
+    [Fact]
+    public async Task ApproveProject_UpdatesCreatorStatusAndCreatesVisibleNotification()
+    {
+        await using var connection = await CreateOpenConnectionAsync();
+        await using var db = CreateDbContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await SeedProjectAsync(db);
+        var project = await db.Proyectos.SingleAsync(item => item.IdProyecto == 10);
+        project.EstadoAprobacion = EstadoAprobacion.Pendiente;
+        await db.SaveChangesAsync();
+
+        var organizer = CreateSolicitudesController(db, actorId: 2);
+        Assert.IsType<RedirectToActionResult>(
+            await organizer.ResolverProyecto(id: 10, aprobar: true, comentario: null));
+
+        var requester = CreateSolicitudesController(db, actorId: 1);
+        var result = Assert.IsType<ViewResult>(await requester.Index());
+        var model = Assert.IsType<SolicitudesViewModel>(result.Model);
+
+        Assert.Equal(EstadoAprobacion.Aprobado, Assert.Single(model.MisSolicitudes).Estado);
+        Assert.Contains(model.Notificaciones, notification =>
+            notification.IdProyecto == 10 &&
+            notification.Titulo.Contains("aprobada", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task ProjectCatalog_DefaultsToTheUsersCareerAndAllowsAllCareers()
+    {
+        await using var connection = await CreateOpenConnectionAsync();
+        await using var db = CreateDbContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await SeedProjectAsync(db);
+        var user = await db.Usuarios.SingleAsync(usuario => usuario.IdUsuario == 3);
+        user.IdCarrera = 1;
+        db.Carreras.Add(new Carrera { IdCarrera = 2, Nombre = "Ingeniería" });
+        db.Proyectos.Add(new Proyecto
+        {
+            IdProyecto = 11,
+            IdUsuarioCreador = 1,
+            IdUsuarioOrganizador = 2,
+            Nombre = "Otro proyecto",
+            Descripcion = "Descripción",
+            LugarReunion = "Campus",
+            FechaInicio = DateTime.UtcNow.Date,
+            FechaFin = DateTime.UtcNow.Date.AddDays(1),
+            IdCarrera = 2,
+            FechaPublicacion = DateTime.UtcNow,
+            FechaSolicitud = DateTime.UtcNow,
+            EstadoAprobacion = EstadoAprobacion.Aprobado,
+            Activo = true
+        });
+        await db.SaveChangesAsync();
+
+        var controller = CreateProjectController(db, actorId: 3);
+        var defaultResult = Assert.IsType<ViewResult>(await controller.Index(
+            idCarrera: null,
+            fechaDesde: null,
+            fechaHasta: null));
+        var defaultProjects = Assert.IsAssignableFrom<IEnumerable<Proyecto>>(defaultResult.Model);
+        Assert.Equal(new[] { 10 }, defaultProjects.Select(proyecto => proyecto.IdProyecto).ToArray());
+
+        var allResult = Assert.IsType<ViewResult>(await controller.Index(idCarrera: 0, fechaDesde: null, fechaHasta: null));
+        var allProjects = Assert.IsAssignableFrom<IEnumerable<Proyecto>>(allResult.Model);
+        Assert.Equal(new[] { 10, 11 }, allProjects.Select(proyecto => proyecto.IdProyecto).Order().ToArray());
     }
 
     [Fact]
@@ -163,6 +248,80 @@ public class PublicacionWorkflowTests
 
         Assert.IsType<RedirectToActionResult>(await controller.AlternarInteres(20));
         Assert.Empty(await db.InteresesEventos.ToListAsync());
+    }
+
+    [Fact]
+    public async Task EventAttendanceList_CombinesInterestedAndRegisteredPeopleWithoutDuplicates()
+    {
+        await using var connection = await CreateOpenConnectionAsync();
+        await using var db = CreateDbContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await SeedUsersAsync(db);
+        db.Eventos.Add(CreateEvent(id: 20, organizerId: 2, creatorId: 1, capacity: null));
+        db.Registros.Add(new Registro { IdUsuario = 3, IdEvento = 20, FechaRegistro = DateTime.UtcNow });
+        db.InteresesEventos.AddRange(
+            new InteresEvento { IdUsuario = 3, IdEvento = 20, FechaInteres = DateTime.UtcNow },
+            new InteresEvento { IdUsuario = 4, IdEvento = 20, FechaInteres = DateTime.UtcNow });
+        db.AsistenciasEventos.Add(new AsistenciaEvento
+        {
+            IdUsuario = 3,
+            IdEvento = 20,
+            FechaAsistencia = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var controller = CreateEventController(db, actorId: 2);
+        var result = Assert.IsType<ViewResult>(await controller.Inscritos(20));
+        var modelo = Assert.IsType<ListaAsistenciaViewModel>(result.Model);
+
+        Assert.Equal(2, modelo.Participantes.Count);
+        Assert.Contains(modelo.Participantes, participante =>
+            participante.IdUsuario == 3 && participante.Inscrito && participante.Interesado && participante.Asistio);
+        Assert.Contains(modelo.Participantes, participante =>
+            participante.IdUsuario == 4 && !participante.Inscrito && participante.Interesado && !participante.Asistio);
+    }
+
+    [Fact]
+    public async Task RegisterEventAttendance_SavesOnlyEligiblePeopleAndSupportsUnmarking()
+    {
+        await using var connection = await CreateOpenConnectionAsync();
+        await using var db = CreateDbContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await SeedUsersAsync(db);
+        db.Eventos.Add(CreateEvent(id: 20, organizerId: 2, creatorId: 1, capacity: null));
+        db.Registros.Add(new Registro { IdUsuario = 3, IdEvento = 20, FechaRegistro = DateTime.UtcNow });
+        db.InteresesEventos.Add(new InteresEvento { IdUsuario = 4, IdEvento = 20, FechaInteres = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var controller = CreateEventController(db, actorId: 2);
+        Assert.IsType<RedirectToActionResult>(await controller.RegistrarAsistencia(20, [3, 4]));
+        Assert.Equal(new[] { 3, 4 },
+            await db.AsistenciasEventos.OrderBy(asistencia => asistencia.IdUsuario)
+                .Select(asistencia => asistencia.IdUsuario).ToArrayAsync());
+
+        Assert.IsType<RedirectToActionResult>(await controller.RegistrarAsistencia(20, [4]));
+        Assert.Equal(new[] { 4 }, await db.AsistenciasEventos.Select(asistencia => asistencia.IdUsuario).ToArrayAsync());
+
+        Assert.IsType<BadRequestResult>(await controller.RegistrarAsistencia(20, [5]));
+        Assert.Equal(new[] { 4 }, await db.AsistenciasEventos.Select(asistencia => asistencia.IdUsuario).ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task RegisterEventAttendance_DeniesUsersWhoDoNotOrganizeTheEvent()
+    {
+        await using var connection = await CreateOpenConnectionAsync();
+        await using var db = CreateDbContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await SeedUsersAsync(db);
+        db.Eventos.Add(CreateEvent(id: 20, organizerId: 2, creatorId: 1, capacity: null));
+        db.Registros.Add(new Registro { IdUsuario = 3, IdEvento = 20, FechaRegistro = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var controller = CreateEventController(db, actorId: 3);
+        var result = Assert.IsType<RedirectToActionResult>(await controller.RegistrarAsistencia(20, [3]));
+
+        Assert.Equal("AccesoDenegado", result.ActionName);
+        Assert.Empty(await db.AsistenciasEventos.ToListAsync());
     }
 
     [Fact]
@@ -296,6 +455,14 @@ public class PublicacionWorkflowTests
         return controller;
     }
 
+    private static SolicitudesController CreateSolicitudesController(GestionEventosDbContext db, int actorId)
+    {
+        var controller = new SolicitudesController(db);
+        ConfigureController(controller, actorId, actorId == 2 ? "Organizador" : "Estudiante");
+        controller.Url = new TestUrlHelper(controller.ControllerContext);
+        return controller;
+    }
+
     private static void ConfigureController(Controller controller, int actorId, string role, bool configureUrl = false)
     {
         var identity = new ClaimsIdentity(
@@ -324,5 +491,16 @@ public class PublicacionWorkflowTests
         public void SaveTempData(HttpContext context, IDictionary<string, object> values)
         {
         }
+    }
+
+    private sealed class TestUrlHelper(ActionContext actionContext) : IUrlHelper
+    {
+        public ActionContext ActionContext { get; } = actionContext;
+
+        public string? Action(UrlActionContext actionContext) => "/";
+        public string? Content(string? contentPath) => contentPath;
+        public bool IsLocalUrl(string? url) => true;
+        public string? Link(string? routeName, object? values) => "/";
+        public string? RouteUrl(UrlRouteContext routeContext) => "/";
     }
 }

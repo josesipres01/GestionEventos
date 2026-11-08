@@ -3,8 +3,11 @@
     ViewData["Title"] = "Mi agenda de registros";
     var registrosEventos = Model?.ToList() ?? new List<Registro>();
     var registrosProyectos = ViewBag.RegistrosProyectos as List<RegistroProyecto> ?? new List<RegistroProyecto>();
+    var interesesEventos = ViewBag.InteresesEventos as List<InteresEvento> ?? new List<InteresEvento>();
+    var interesesProyectos = ViewBag.InteresesProyectos as List<InteresProyecto> ?? new List<InteresProyecto>();
     var notificaciones = ViewBag.Notificaciones as List<Notificacion> ?? new List<Notificacion>();
-    var totalRegistros = registrosEventos.Count + registrosProyectos.Count;
+    var eventosAcreditadosIds = ViewBag.EventosAcreditadosIds as HashSet<int> ?? new HashSet<int>();
+    var totalRegistros = registrosEventos.Count + registrosProyectos.Count + interesesEventos.Count + interesesProyectos.Count;
 
     string[] imagenesAgenda =
     [
@@ -43,7 +46,7 @@
             <div>
                 <h1 class="nexo-section-title">Mis registros a eventos y proyectos</h1>
                 <p class="text-muted mt-2 mb-0">
-                    Consulta los eventos universitarios y los proyectos académicos en los que estás inscrito, y revisa quiénes más asistirán.
+                    Consulta lo que te interesa y las actividades en las que ya participas.
                 </p>
             </div>
 
@@ -102,7 +105,7 @@
                             <div class="d-flex align-items-center gap-2">
                                 @if (!notif.Leida)
                                 {
-                                    <span class="badge rounded-pill" style="background-color: var(--nexo-coral); color: #fff;">NUEVO</span>
+                                    <span class="badge" style="background-color: var(--nexo-coral); color: #fff;">NUEVO</span>
                                 }
                                 <strong>@notif.Titulo</strong>
                                 <span class="text-muted small">· @notif.FechaCreacion.ToLocalTime().ToString("dd MMM yyyy · HH:mm")</span>
@@ -138,26 +141,44 @@
         </div>
     }
 
-    <div class="nexo-filter-bar">
-        <div class="nexo-filter-pills" role="tablist">
-            <button type="button" class="nexo-pill active" data-nexo-filter="todo">Todo (@totalRegistros)</button>
-            <button type="button" class="nexo-pill" data-nexo-filter="evento">Eventos (@registrosEventos.Count)</button>
-            <button type="button" class="nexo-pill" data-nexo-filter="proyecto">Proyectos (@registrosProyectos.Count)</button>
+    <form asp-action="MisRegistros" method="get" class="nexo-catalog-filters mb-4">
+        <label>
+            <span>Desde</span>
+            <input type="date" name="fechaDesde" class="nexo-input" value="@ViewBag.FechaDesde" />
+        </label>
+        <label>
+            <span>Hasta</span>
+            <input type="date" name="fechaHasta" class="nexo-input" value="@ViewBag.FechaHasta" />
+        </label>
+        <div class="d-flex align-items-center gap-2">
+            <button type="submit" class="btn-nexo-primary">Filtrar agenda</button>
+            <a asp-action="MisRegistros" class="btn-nexo-outline">Limpiar</a>
         </div>
+    </form>
 
-        <div class="nexo-count-label"
-             data-nexo-counter
-             data-singular="registro activo"
-             data-plural="registros activos">
-            @totalRegistros @(totalRegistros == 1 ? "registro activo" : "registros activos")
+    <div asp-validation-summary="All" class="text-danger small mb-3"></div>
+    <div class="nexo-filter-bar">
+        <div class="nexo-filter-toolbar">
+            <div class="nexo-filter-pills" role="tablist">
+                <button type="button" class="nexo-pill active" data-nexo-filter="todo">Todo (@totalRegistros)</button>
+                <button type="button" class="nexo-pill" data-nexo-filter="evento">Eventos (@(registrosEventos.Count + interesesEventos.Count))</button>
+                <button type="button" class="nexo-pill" data-nexo-filter="proyecto">Proyectos (@(registrosProyectos.Count + interesesProyectos.Count))</button>
+            </div>
+
+            <div class="nexo-count-label"
+                 data-nexo-counter
+                 data-singular="registro activo"
+                 data-plural="registros activos">
+                @totalRegistros @(totalRegistros == 1 ? "registro activo" : "registros activos")
+            </div>
         </div>
     </div>
 
     @if (totalRegistros == 0)
     {
         <div class="nexo-empty">
-            <h2 class="h5 fw-bold mb-2">Aún no te has registrado en ningún evento o proyecto</h2>
-            <p class="text-muted mb-4">Explora la cartelera universitaria para registrarte en eventos o sumarte a proyectos académicos.</p>
+            <h2 class="h5 fw-bold mb-2">Tu agenda está vacía</h2>
+            <p class="text-muted mb-4">Marca que te interesa o inscríbete en proyectos y eventos para guardarlos aquí.</p>
             <a asp-controller="Eventos" asp-action="Index" class="btn-nexo-primary">
                 Explorar campus →
             </a>
@@ -176,7 +197,7 @@
                     : imagenesAgenda[(indice - 1) % imagenesAgenda.Length];
                 var organizador = evento.Organizador is not null
                     ? $"{evento.Organizador.Nombres} {evento.Organizador.ApellidoPaterno}".Trim()
-                    : "Organizador UNISON";
+                    : "Organizador";
                 var iniciales = ObtenerIniciales(organizador);
                 var palabrasClave = $"{evento.Nombre} {evento.Descripcion} {evento.Lugar} {organizador} evento";
                 indice++;
@@ -192,8 +213,14 @@
                     </a>
 
                     <div class="nexo-card-body">
-                        <div class="nexo-card-category">
-                            REGISTRADO EL @registro.FechaRegistro.ToLocalTime().ToString("dd MMM yyyy · HH:mm").ToUpperInvariant()
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <div class="nexo-card-category">
+                                REGISTRADO EL @registro.FechaRegistro.ToLocalTime().ToString("dd MMM yyyy · HH:mm").ToUpperInvariant()
+                            </div>
+                            @if (eventosAcreditadosIds.Contains(evento.IdEvento))
+                            {
+                                <span class="badge text-bg-success">✓ Participación acreditada</span>
+                            }
                         </div>
                         <h2 class="nexo-card-title">
                             <a asp-controller="Eventos" asp-action="Detalle" asp-route-id="@evento.IdEvento" class="nexo-card-link">
@@ -248,6 +275,106 @@
                 </article>
             }
 
+            @foreach (var interes in interesesEventos)
+            {
+                var evento = interes.Evento;
+                var numeroTexto = indice.ToString("D2");
+                var imagenUrl = !string.IsNullOrWhiteSpace(evento.ImagenUrl)
+                    ? evento.ImagenUrl
+                    : imagenesAgenda[(indice - 1) % imagenesAgenda.Length];
+                var organizador = evento.Organizador is not null
+                    ? $"{evento.Organizador.Nombres} {evento.Organizador.ApellidoPaterno}".Trim()
+                    : "Organizador";
+                indice++;
+
+                <article class="nexo-card"
+                         data-nexo-item
+                         data-nexo-type="evento"
+                         data-nexo-keywords="@($"{evento.Nombre} {evento.Descripcion} {evento.Lugar} {organizador}")">
+                    <a asp-controller="Eventos" asp-action="Detalle" asp-route-id="@evento.IdEvento" class="nexo-card-media d-block text-decoration-none">
+                        <span class="nexo-badge-type">EVENTO · ME INTERESA</span>
+                        <img src="@imagenUrl" alt="@evento.Nombre" loading="lazy" />
+                    </a>
+                    <div class="nexo-card-body">
+                        <div class="nexo-card-category">@evento.FechaHora.ToString("dd MMM yyyy · HH:mm") · @evento.Lugar</div>
+                        <h2 class="nexo-card-title">
+                            <a asp-controller="Eventos" asp-action="Detalle" asp-route-id="@evento.IdEvento" class="nexo-card-link">@evento.Nombre</a>
+                        </h2>
+                        <p class="nexo-card-desc">@evento.Descripcion</p>
+                        <div class="nexo-card-footer">
+                            <span class="text-muted small">Aún no estás inscrito</span>
+                            <div class="d-flex flex-wrap gap-2">
+                                @if (!evento.Cupo.HasValue || evento.Registros.Count < evento.Cupo.Value)
+                                {
+                                    <form asp-controller="Eventos" asp-action="RegistrarInteres" asp-route-id="@evento.IdEvento" method="post">
+                                        <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                                        <button type="submit" class="btn-nexo-primary">Inscribirme</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <span class="btn-nexo-registered">Cupo completo</span>
+                                }
+                                <form asp-controller="Eventos" asp-action="AlternarInteres" asp-route-id="@evento.IdEvento" method="post">
+                                    <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                                    <button type="submit" class="btn-nexo-ghost">Quitar de mi agenda</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            }
+
+            @foreach (var interes in interesesProyectos)
+            {
+                var proyecto = interes.Proyecto;
+                var numeroTexto = indice.ToString("D2");
+                var imagenUrl = !string.IsNullOrWhiteSpace(proyecto.ImagenUrl)
+                    ? proyecto.ImagenUrl
+                    : imagenesProyectos[(indice - 1) % imagenesProyectos.Length];
+                var organizador = proyecto.Organizador is not null
+                    ? $"{proyecto.Organizador.Nombres} {proyecto.Organizador.ApellidoPaterno}".Trim()
+                    : "Organizador pendiente";
+                indice++;
+
+                <article class="nexo-card"
+                         data-nexo-item
+                         data-nexo-type="proyecto"
+                         data-nexo-keywords="@($"{proyecto.Nombre} {proyecto.Descripcion} {proyecto.LugarReunion} {organizador}")">
+                    <a asp-controller="Proyectos" asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="nexo-card-media d-block text-decoration-none">
+                        <span class="nexo-badge-type badge-proyecto">PROYECTO · ME INTERESA</span>
+                        <img src="@imagenUrl" alt="@proyecto.Nombre" loading="lazy" />
+                    </a>
+                    <div class="nexo-card-body">
+                        <div class="nexo-card-category">@proyecto.FechaInicio.ToString("dd MMM yyyy") – @proyecto.FechaFin.ToString("dd MMM yyyy")</div>
+                        <h2 class="nexo-card-title">
+                            <a asp-controller="Proyectos" asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="nexo-card-link">@proyecto.Nombre</a>
+                        </h2>
+                        <p class="nexo-card-desc">@proyecto.Descripcion</p>
+                        <div class="nexo-card-footer">
+                            <span class="text-muted small">Aún no participas</span>
+                            <div class="d-flex flex-wrap gap-2">
+                                @if (!proyecto.Cupo.HasValue || proyecto.Registros.Count(registro => registro.Estado != EstadoRegistroProyecto.Rechazado) < proyecto.Cupo.Value)
+                                {
+                                    <form asp-controller="Proyectos" asp-action="RegistrarInteres" asp-route-id="@proyecto.IdProyecto" method="post">
+                                        <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                                        <button type="submit" class="btn-nexo-primary">Unirme al proyecto</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <span class="btn-nexo-registered">Cupo completo</span>
+                                }
+                                <form asp-controller="Proyectos" asp-action="AlternarInteres" asp-route-id="@proyecto.IdProyecto" method="post">
+                                    <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                                    <button type="submit" class="btn-nexo-ghost">Quitar de mi agenda</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            }
+
             @foreach (var regProyecto in registrosProyectos)
             {
                 var proyecto = regProyecto.Proyecto;
@@ -259,7 +386,7 @@
                     ? $"{proyecto.Organizador.Nombres} {proyecto.Organizador.ApellidoPaterno}".Trim()
                     : "Organizador pendiente";
                 var iniciales = ObtenerIniciales(nombreOrganizador);
-                var carrera = proyecto.Carrera?.Nombre ?? "Proyecto UNISON";
+                var carrera = proyecto.Carrera?.Nombre ?? "Proyecto académico";
                 var palabrasClave = $"{proyecto.Nombre} {proyecto.Descripcion} {proyecto.LugarReunion} {nombreOrganizador} {carrera} proyecto";
                 indice++;
 
@@ -274,8 +401,14 @@
                     </a>
 
                     <div class="nexo-card-body">
-                        <div class="nexo-card-category">
-                            UNIDO EL @regProyecto.FechaRegistro.ToLocalTime().ToString("dd MMM yyyy · HH:mm").ToUpperInvariant()
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <div class="nexo-card-category">
+                                UNIDO EL @regProyecto.FechaRegistro.ToLocalTime().ToString("dd MMM yyyy · HH:mm").ToUpperInvariant()
+                            </div>
+                            @if (regProyecto.FechaRevision.HasValue)
+                            {
+                                <span class="badge text-bg-success">✓ Participación acreditada</span>
+                            }
                         </div>
                         <h2 class="nexo-card-title">
                             <a asp-controller="Proyectos" asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="nexo-card-link">

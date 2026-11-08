@@ -61,7 +61,7 @@ public class AdminController(
             Carreras = carreras
         };
 
-        return View(modelo);
+        return View("PanelAdministracion", modelo);
     }
 
     [HttpGet]
@@ -73,7 +73,7 @@ public class AdminController(
         }
 
         await CargarCatalogosAsync();
-        return View(new RegistrarOrganizadorViewModel { IdRol = 2 });
+        return View("RegistrarUsuarioRol", new RegistrarOrganizadorViewModel { IdRol = 2 });
     }
 
     [HttpPost]
@@ -107,7 +107,7 @@ public class AdminController(
         if (!ModelState.IsValid)
         {
             await CargarCatalogosAsync();
-            return View(modelo);
+            return View("RegistrarUsuarioRol", modelo);
         }
 
         var nuevoUsuario = new Usuario
@@ -193,12 +193,13 @@ public class AdminController(
 
         var carreras = await dbContext.Carreras
             .AsNoTrackingWithIdentityResolution()
+            .AsSplitQuery()
             .Include(c => c.Usuarios)
             .Include(c => c.Proyectos)
             .OrderBy(c => c.Nombre)
             .ToListAsync();
 
-        return View(carreras);
+        return View("GestionCarreras", carreras);
     }
 
     [HttpPost]
@@ -281,7 +282,7 @@ public class AdminController(
             .ToListAsync();
 
         ViewBag.Proyectos = proyectos;
-        return View(eventos);
+        return View("SupervisionPublicaciones", eventos);
     }
 
     [HttpPost]

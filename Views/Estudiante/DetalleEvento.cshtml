@@ -4,13 +4,17 @@
     var estaRegistrado = ViewBag.EstaRegistrado as bool? ?? false;
     var estaInteresado = ViewBag.EstaInteresado as bool? ?? false;
     var puedeEditar = ViewBag.PuedeEditar as bool? ?? false;
+    var idsConAsistencia = ViewBag.IdsConAsistencia as HashSet<int> ?? new HashSet<int>();
     var registros = Model.Registros
         .OrderByDescending(r => r.FechaRegistro)
         .ToList();
+    var totalAsistenciasAcreditadas = idsConAsistencia.Count;
+    var puedePasarListaEvento = DateTime.Today >= Model.FechaHora.Date;
+    var eventoCerrado = DateTime.Now >= Model.FechaHora;
 
     var nombreOrganizador = Model.Organizador is not null
         ? string.Join(" ", new[] { Model.Organizador.Nombres, Model.Organizador.ApellidoPaterno, Model.Organizador.ApellidoMaterno }.Where(s => !string.IsNullOrWhiteSpace(s)))
-        : "Organizador UNISON";
+        : "Organizador";
 
     string[] imagenesEventos =
     [
@@ -39,9 +43,21 @@
         <a asp-controller="Eventos" asp-action="Index" class="btn-nexo-outline">
             ← Volver a eventos
         </a>
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex flex-wrap align-items-center gap-2">
             @if (puedeEditar && Model.Activo)
             {
+                if (puedePasarListaEvento)
+                {
+                    <a asp-controller="Eventos" asp-action="Inscritos" asp-route-id="@Model.IdEvento" class="btn-nexo-primary">
+                        ✓ Registrar participación (@totalAsistenciasAcreditadas/@registros.Count)
+                    </a>
+                }
+                else
+                {
+                    <a asp-controller="Eventos" asp-action="Inscritos" asp-route-id="@Model.IdEvento" class="btn-nexo-outline" title="El pase de participación se habilita el día de inicio del evento">
+                        ⏳ Pase disponible el @Model.FechaHora.ToString("dd/MM/yyyy")
+                    </a>
+                }
                 <a asp-controller="Eventos" asp-action="Editar" asp-route-id="@Model.IdEvento" class="btn-nexo-outline">
                     ✎ Editar evento
                 </a>
@@ -78,7 +94,7 @@
                 <span class="badge bg-light text-dark fw-bold px-3 py-2 text-uppercase" style="border-left: 4px solid var(--nexo-lime);">
                     EVENTO UNIVERSITARIO
                 </span>
-                <span class="badge rounded-pill px-3 py-2" style="background-color: rgba(215, 242, 90, 0.2); color: var(--nexo-lime);">
+                <span class="badge px-3 py-2" style="background-color: rgba(215, 242, 90, 0.2); color: var(--nexo-lime);">
                     @Model.Lugar
                 </span>
             </div>
@@ -94,7 +110,7 @@
                 <span><strong>Personas interesadas:</strong> <span class="text-white">@Model.Intereses.Count</span></span>
                 @if (Model.Cupo.HasValue)
                 {
-                    <span><strong>Cupo:</strong> <span class="text-white">@registros.Count / @Model.Cupo</span></span>
+                    <span><strong>Cupo máximo:</strong> <span class="text-white">@Model.Cupo</span></span>
                 }
             </div>
         </div>
@@ -128,29 +144,61 @@
                         </p>
                     </div>
 
-                    @if (registros.Any())
-                    {
-                        <div class="nexo-search-box" style="min-width: 240px;">
-                            <span class="nexo-search-icon" aria-hidden="true">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="11" cy="11" r="8"></circle>
-                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                                </svg>
-                            </span>
-                            <input type="search"
-                                   class="nexo-search-input"
-                                   placeholder="Buscar amigos o carrera..."
-                                   aria-label="Buscar personas registradas al evento"
-                                   data-nexo-search />
-                        </div>
-                    }
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        @if (puedeEditar && Model.Activo && puedePasarListaEvento)
+                        {
+                            <a asp-controller="Eventos"
+                               asp-action="Inscritos"
+                               asp-route-id="@Model.IdEvento"
+                               class="btn-nexo-interest text-decoration-none">
+                                ✓ Pasar lista / Acreditar participación →
+                            </a>
+                        }
+                        @if (registros.Any())
+                        {
+                            <div class="nexo-search-box" style="min-width: 240px;">
+                                <span class="nexo-search-icon" aria-hidden="true">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="11" cy="11" r="8"></circle>
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                    </svg>
+                                </span>
+                                <input type="search"
+                                       class="nexo-search-input"
+                                       placeholder="Buscar amigos o carrera..."
+                                       aria-label="Buscar personas registradas al evento"
+                                       data-nexo-search />
+                            </div>
+                        }
+                    </div>
                 </div>
 
                 @if (!registros.Any())
                 {
                     <div class="nexo-empty py-4">
                         <p class="fw-semibold mb-1">Aún no hay personas registradas en este evento.</p>
-                        <p class="text-muted small mb-0">¡Regístrate ahora para inaugurar la lista de asistentes!</p>
+                        @if (puedeEditar && Model.Activo && puedePasarListaEvento)
+                        {
+                            <p class="text-muted small mb-3">
+                                Puedes abrir la sección de <strong>Registro de participación</strong> para tomar asistencia o agregar participantes directamente.
+                            </p>
+                            <a asp-controller="Eventos"
+                               asp-action="Inscritos"
+                               asp-route-id="@Model.IdEvento"
+                               class="btn-nexo-primary">
+                                ✓ Abrir registro de participación →
+                            </a>
+                        }
+                        else if (puedeEditar && Model.Activo)
+                        {
+                            <p class="text-muted small mb-0">
+                                El pase de participación se habilitará el mismo día de inicio del evento (<strong>@Model.FechaHora.ToString("dd/MM/yyyy")</strong>).
+                            </p>
+                        }
+                        else
+                        {
+                            <p class="text-muted small mb-0">¡Regístrate ahora para inaugurar la lista de asistentes!</p>
+                        }
                     </div>
                 }
                 else
@@ -161,10 +209,11 @@
                             var asistente = reg.Usuario;
                             var nombreAsistente = asistente is not null
                                 ? string.Join(" ", new[] { asistente.Nombres, asistente.ApellidoPaterno, asistente.ApellidoMaterno }.Where(s => !string.IsNullOrWhiteSpace(s)))
-                                : "Estudiante UNISON";
+                                : "Estudiante";
                             var carreraAsistente = asistente?.Carrera?.Nombre ?? "Comunidad Universitaria";
                             var iniciales = ObtenerIniciales(nombreAsistente);
                             var palabrasBusqueda = $"{nombreAsistente} {carreraAsistente}";
+                            var asistenciaAcreditada = idsConAsistencia.Contains(reg.IdUsuario);
 
                             <div class="nexo-attendee-card"
                                  data-nexo-item
@@ -172,7 +221,13 @@
                                  data-nexo-keywords="@palabrasBusqueda">
                                 <span class="nexo-avatar-lg">@iniciales</span>
                                 <div class="min-w-0">
-                                    <div class="fw-bold text-truncate">@nombreAsistente</div>
+                                    <div class="d-flex flex-wrap align-items-center gap-1">
+                                        <span class="fw-bold text-truncate">@nombreAsistente</span>
+                                        @if (asistenciaAcreditada)
+                                        {
+                                            <span class="badge text-bg-success" style="font-size: 0.68rem;">✓ Participación acreditada</span>
+                                        }
+                                    </div>
                                     <div class="text-muted small text-truncate">@carreraAsistente</div>
                                     <div class="text-muted" style="font-size: 0.74rem;">
                                         Registrado el @reg.FechaRegistro.ToLocalTime().ToString("dd MMM yyyy · HH:mm")
@@ -187,6 +242,49 @@
                     </div>
                 }
             </section>
+
+            @if (puedeEditar && Model.Activo)
+            {
+                <section class="nexo-panel" id="registro-participacion-evento">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                        <div>
+                            <div class="nexo-eyebrow mb-1">
+                                <span class="nexo-eyebrow-dot"></span>
+                                <span>CONTROL DE PARTICIPACIÓN</span>
+                            </div>
+                            <h2 class="h5 fw-bold mb-1">Registro de participación del evento</h2>
+                            <p class="text-muted small mb-0">
+                                @(puedePasarListaEvento
+                                    ? "El pase de participación está activo desde hoy. Confirma quiénes participaron en el evento."
+                                    : $"El pase de participación se habilitará el mismo día de inicio del evento ({Model.FechaHora:dd/MM/yyyy}).")
+                            </p>
+                        </div>
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <span class="nexo-count-label">
+                                @totalAsistenciasAcreditadas de @registros.Count acreditados
+                            </span>
+                            @if (puedePasarListaEvento)
+                            {
+                                <a asp-controller="Eventos"
+                                   asp-action="Inscritos"
+                                   asp-route-id="@Model.IdEvento"
+                                   class="btn-nexo-primary">
+                                    ✓ Gestionar participación →
+                                </a>
+                            }
+                            else
+                            {
+                                <a asp-controller="Eventos"
+                                   asp-action="Inscritos"
+                                   asp-route-id="@Model.IdEvento"
+                                   class="btn-nexo-outline">
+                                    Ver lista (Pase el @Model.FechaHora.ToString("dd/MM/yyyy"))
+                                </a>
+                            }
+                        </div>
+                    </div>
+                </section>
+            }
         </div>
 
         <!-- Columna lateral: Resumen y botón de inscripción -->
@@ -214,14 +312,49 @@
                 <dd class="fw-semibold mb-0">
                     @registros.Count @(registros.Count == 1 ? "persona registrada" : "personas registradas")
                 </dd>
+                <dt class="text-muted small text-uppercase mt-3">Participación acreditada</dt>
+                <dd class="fw-semibold mb-0" style="color: var(--nexo-teal);">
+                    @totalAsistenciasAcreditadas @(totalAsistenciasAcreditadas == 1 ? "persona validada" : "personas validadas")
+                </dd>
                 <dt class="text-muted small text-uppercase mt-3">Personas interesadas</dt>
                 <dd class="fw-semibold mb-0">@Model.Intereses.Count</dd>
                 @if (Model.Cupo.HasValue)
                 {
+                    var disponiblesEvento = Math.Max(0, Model.Cupo.Value - registros.Count);
                     <dt class="text-muted small text-uppercase mt-3">Cupo máximo</dt>
-                    <dd class="fw-semibold mb-0">@registros.Count de @Model.Cupo</dd>
+                    <dd class="fw-semibold mb-0">@Model.Cupo @(Model.Cupo == 1 ? "persona" : "personas") (@disponiblesEvento @(disponiblesEvento == 1 ? "lugar disponible" : "lugares disponibles"))</dd>
                 }
             </dl>
+
+            @if (puedeEditar && Model.Activo)
+            {
+                <div class="pt-3 border-top mb-3">
+                    @if (puedePasarListaEvento)
+                    {
+                        <a asp-controller="Eventos"
+                           asp-action="Inscritos"
+                           asp-route-id="@Model.IdEvento"
+                           class="btn-nexo-primary w-100 justify-content-center mb-2">
+                            ✓ Registrar participación (@totalAsistenciasAcreditadas/@registros.Count)
+                        </a>
+                    }
+                    else
+                    {
+                        <a asp-controller="Eventos"
+                           asp-action="Inscritos"
+                           asp-route-id="@Model.IdEvento"
+                           class="btn-nexo-outline w-100 justify-content-center mb-2">
+                            ⏳ Pase disponible el @Model.FechaHora.ToString("dd/MM/yyyy")
+                        </a>
+                    }
+                    <a asp-controller="Eventos"
+                       asp-action="Editar"
+                       asp-route-id="@Model.IdEvento"
+                       class="btn-nexo-outline w-100 justify-content-center">
+                        Editar evento
+                    </a>
+                </div>
+            }
 
             @if (Model.Activo && Model.EstadoAprobacion == EstadoAprobacion.Aprobado)
             {
@@ -311,17 +444,20 @@
                   asp-action="Eliminar"
                   asp-route-id="@Model.IdEvento"
                   method="post"
-                  class="d-flex flex-column flex-sm-row align-items-sm-end gap-2">
-                <div class="flex-grow-1">
-                    <label for="motivoEliminacionEvento" class="form-label">Motivo de eliminación</label>
+                  class="d-flex flex-column gap-3 mt-3">
+                <div>
+                    <label for="motivoEliminacionEvento" class="nexo-label">Motivo de eliminación</label>
                     <textarea id="motivoEliminacionEvento"
                               name="motivo"
-                              class="form-control"
+                              class="nexo-textarea"
                               maxlength="1000"
                               rows="2"
+                              placeholder="Explica brevemente el motivo por el que se da de baja este evento..."
                               required></textarea>
                 </div>
-                <button type="submit" class="btn-nexo-ghost">Eliminar evento</button>
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn-nexo-danger">Eliminar evento</button>
+                </div>
             </form>
         </section>
     }

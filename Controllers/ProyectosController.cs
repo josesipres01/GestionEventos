@@ -11,6 +11,7 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace GestionEventos.Controllers;
 
+[Authorize]
 public class ProyectosController(
     GestionEventosDbContext dbContext,
     IMemoryCache memoryCache,
@@ -23,25 +24,63 @@ public class ProyectosController(
 
     private const long TamanoMaximoImagenBytes = 5 * 1024 * 1024; // 5 MB
 
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(int? idCarrera, DateTime? fechaDesde, DateTime? fechaHasta)
     {
-        var proyectos = await dbContext.Proyectos
+        if (fechaDesde.HasValue && fechaHasta.HasValue && fechaDesde.Value.Date > fechaHasta.Value.Date)
+        {
+            ModelState.AddModelError(nameof(fechaHasta), "La fecha final debe ser igual o posterior a la fecha inicial.");
+        }
+
+        var usuarioId = int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id)
+            ? id
+            : 0;
+        var usuarioCarreraId = usuarioId == 0
+            ? null
+            : await dbContext.Usuarios
+                .AsNoTracking()
+                .Where(usuario => usuario.IdUsuario == usuarioId)
+                .Select(usuario => usuario.IdCarrera)
+                .FirstOrDefaultAsync();
+        var filtroCarrera = idCarrera == 0 ? null : idCarrera ?? usuarioCarreraId;
+        var proyectosQuery = dbContext.Proyectos
             .AsNoTrackingWithIdentityResolution()
+            .AsSplitQuery()
             .Include(proyecto => proyecto.Carrera)
             .Include(proyecto => proyecto.Creador)
             .Include(proyecto => proyecto.Organizador)
             .Include(proyecto => proyecto.Registros)
             .Include(proyecto => proyecto.Intereses)
-            .Where(proyecto => proyecto.Activo && proyecto.EstadoAprobacion == EstadoAprobacion.Aprobado)
+            .Where(proyecto => proyecto.Activo && proyecto.EstadoAprobacion == EstadoAprobacion.Aprobado);
+
+        if (filtroCarrera.HasValue)
+        {
+            proyectosQuery = proyectosQuery.Where(proyecto => proyecto.IdCarrera == filtroCarrera);
+        }
+
+        if (!(fechaDesde.HasValue && fechaHasta.HasValue && fechaDesde.Value.Date > fechaHasta.Value.Date))
+        {
+            if (fechaDesde.HasValue)
+            {
+                var desde = fechaDesde.Value.Date;
+                proyectosQuery = proyectosQuery.Where(proyecto => proyecto.FechaFin >= desde);
+            }
+
+            if (fechaHasta.HasValue)
+            {
+                var hasta = fechaHasta.Value.Date.AddDays(1);
+                proyectosQuery = proyectosQuery.Where(proyecto => proyecto.FechaInicio < hasta);
+            }
+        }
+
+        var proyectos = await proyectosQuery
             .OrderByDescending(proyecto => proyecto.FechaPublicacion)
             .ToListAsync();
 
         var registradosIds = new HashSet<int>();
         var interesadosIds = new HashSet<int>();
-        var usuarioActualId = 0;
-        if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
+        var usuarioActualId = usuarioId;
+        if (usuarioId > 0)
         {
-            usuarioActualId = usuarioId;
             registradosIds = proyectos
                 .Where(p => p.Registros.Any(r =>
                     r.IdUsuario == usuarioId && r.Estado != EstadoRegistroProyecto.Rechazado))
@@ -56,7 +95,57 @@ public class ProyectosController(
         ViewBag.ProyectosRegistradosIds = registradosIds;
         ViewBag.ProyectosInteresadosIds = interesadosIds;
         ViewBag.UsuarioActualId = usuarioActualId;
-        return View(proyectos);
+        ViewBag.Carreras = await dbContext.Carreras.AsNoTracking().OrderBy(carrera => carrera.Nombre).ToListAsync();
+        ViewBag.IdCarreraSeleccionada = filtroCarrera;
+        ViewBag.FechaDesde = fechaDesde?.ToString("yyyy-MM-dd");
+        ViewBag.FechaHasta = fechaHasta?.ToString("yyyy-MM-dd");
+        return View("~/Views/Estudiante/CatalogoProyectos.cshtml", proyectos);
+    }
+
+    [Authorize]
+    [HttpGet]
+    public async Task<IActionResult> MisPropuestas()
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
+        {
+            return Challenge();
+        }
+
+        var rolUsuario = await dbContext.Usuarios
+            .AsNoTracking()
+            .Where(u => u.IdUsuario == usuarioId)
+            .Select(u => new { u.IdRol, NombreRol = u.Rol.Nombre })
+            .FirstOrDefaultAsync();
+
+        var esOrganizador = User.IsInRole("Organizador") ||
+            User.IsInRole("Administrador") ||
+            User.IsInRole("Admin") ||
+            (rolUsuario is not null &&
+             (rolUsuario.IdRol == 2 ||
+              rolUsuario.IdRol == 3 ||
+              rolUsuario.NombreRol.Contains("Organizador", StringComparison.OrdinalIgnoreCase) ||
+              rolUsuario.NombreRol.Contains("Admin", StringComparison.OrdinalIgnoreCase)));
+
+        if (esOrganizador)
+        {
+            return RedirectToAction("MisEventos", "Eventos");
+        }
+
+        var propuestas = await dbContext.Proyectos
+            .AsNoTrackingWithIdentityResolution()
+            .Include(proyecto => proyecto.Carrera)
+            .Include(proyecto => proyecto.Organizador)
+            .Include(proyecto => proyecto.Registros)
+            .Include(proyecto => proyecto.Creador)
+            .Where(proyecto =>
+                proyecto.IdUsuarioCreador == usuarioId ||
+                proyecto.IdUsuarioOrganizador == usuarioId)
+            .OrderByDescending(proyecto => proyecto.FechaSolicitud)
+            .ToListAsync();
+
+        ViewBag.UsuarioActualId = usuarioId;
+        ViewBag.EsOrganizador = false;
+        return View("~/Views/Estudiante/MisPropuestasProyectos.cshtml", propuestas);
     }
 
     [HttpGet]
@@ -80,6 +169,13 @@ public class ProyectosController(
             return NotFound();
         }
 
+        if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioNotificacionId))
+        {
+            await dbContext.Notificaciones
+                .Where(n => n.IdUsuario == usuarioNotificacionId && n.IdProyecto == id && !n.Leida)
+                .ExecuteUpdateAsync(update => update.SetProperty(n => n.Leida, true));
+        }
+
         if (!proyecto.Activo)
         {
             return NotFound();
@@ -97,14 +193,22 @@ public class ProyectosController(
 
         var registroActual = (RegistroProyecto?)null;
         var puedeEditar = false;
+        var esEstudiante = User.IsInRole("Estudiante");
         if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
         {
             registroActual = proyecto.Registros.FirstOrDefault(r => r.IdUsuario == usuarioId);
             puedeEditar = await PuedeEditarProyectoAsync(proyecto, usuarioId);
 
-            await dbContext.Notificaciones
-                .Where(n => n.IdUsuario == usuarioId && n.IdProyecto == id)
-                .ExecuteUpdateAsync(update => update.SetProperty(n => n.Leida, true));
+            var rolUsuario = await dbContext.Usuarios
+                .AsNoTracking()
+                .Where(u => u.IdUsuario == usuarioId)
+                .Select(u => new { u.IdRol, NombreRol = u.Rol.Nombre })
+                .FirstOrDefaultAsync();
+            if (rolUsuario is not null)
+            {
+                esEstudiante = rolUsuario.IdRol == 1 ||
+                    rolUsuario.NombreRol.Contains("Estudiante", StringComparison.OrdinalIgnoreCase);
+            }
         }
 
         ViewBag.EstaRegistrado = registroActual is not null &&
@@ -112,8 +216,16 @@ public class ProyectosController(
         ViewBag.EstaInteresado = int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioInteresadoId) &&
             proyecto.Intereses.Any(interes => interes.IdUsuario == usuarioInteresadoId);
         ViewBag.PuedeEditar = puedeEditar;
+        ViewBag.EsEstudiante = esEstudiante;
+        ViewBag.EsProyectoPropio = int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioPropietarioId) &&
+            (proyecto.IdUsuarioCreador == usuarioPropietarioId ||
+             proyecto.IdUsuarioOrganizador == usuarioPropietarioId);
+        ViewBag.IdsConParticipacion = proyecto.Registros
+            .Where(r => r.Estado != EstadoRegistroProyecto.Rechazado && r.FechaRevision.HasValue)
+            .Select(r => r.IdUsuario)
+            .ToHashSet();
 
-        return View(proyecto);
+        return View("~/Views/Estudiante/DetalleProyecto.cshtml", proyecto);
     }
 
     [Authorize]
@@ -121,7 +233,7 @@ public class ProyectosController(
     public async Task<IActionResult> Crear()
     {
         await CargarCatalogosAsync();
-        return View(new CrearProyectoViewModel());
+        return View("~/Views/Estudiante/PublicarProyecto.cshtml", new CrearProyectoViewModel());
     }
 
     [Authorize]
@@ -171,7 +283,7 @@ public class ProyectosController(
         if (!ModelState.IsValid)
         {
             await CargarCatalogosAsync();
-            return View(modelo);
+            return View("~/Views/Estudiante/PublicarProyecto.cshtml", modelo);
         }
 
         var imagenUrl = await GuardarImagenProyectoAsync(modelo.ImagenArchivo);
@@ -194,6 +306,14 @@ public class ProyectosController(
         };
 
         dbContext.Proyectos.Add(nuevoProyecto);
+        dbContext.Notificaciones.Add(new Notificacion
+        {
+            IdUsuario = nuevoProyecto.IdUsuarioOrganizador.Value,
+            Proyecto = nuevoProyecto,
+            Titulo = $"Nueva solicitud de proyecto: {nuevoProyecto.Nombre}",
+            Mensaje = $"{User.Identity?.Name ?? "Un estudiante"} envió un proyecto para tu revisión.",
+            FechaCreacion = DateTime.UtcNow
+        });
         await dbContext.SaveChangesAsync();
 
         TempData["Mensaje"] = "Tu solicitud de proyecto se envió al organizador para su aprobación.";
@@ -217,6 +337,7 @@ public class ProyectosController(
         {
             return NotFound();
         }
+
         if (!proyecto.Activo)
         {
             return NotFound();
@@ -239,7 +360,7 @@ public class ProyectosController(
 
         await CargarCatalogosAsync();
 
-        return View(new EditarProyectoViewModel
+        return View("~/Views/Estudiante/EditarProyecto.cshtml", new EditarProyectoViewModel
         {
             IdProyecto = proyecto.IdProyecto,
             Nombre = proyecto.Nombre,
@@ -274,6 +395,7 @@ public class ProyectosController(
         {
             return NotFound();
         }
+
         if (!proyecto.Activo)
         {
             return NotFound();
@@ -317,7 +439,7 @@ public class ProyectosController(
         {
             modelo.ImagenUrlActual = proyecto.ImagenUrl;
             await CargarCatalogosAsync();
-            return View(modelo);
+            return View("~/Views/Estudiante/EditarProyecto.cshtml", modelo);
         }
 
         var nuevoNombre = modelo.Nombre.Trim();
@@ -337,7 +459,7 @@ public class ProyectosController(
             await transaction.RollbackAsync();
             modelo.ImagenUrlActual = proyecto.ImagenUrl;
             await CargarCatalogosAsync();
-            return View(modelo);
+            return View("~/Views/Estudiante/EditarProyecto.cshtml", modelo);
         }
 
         if (modelo.ImagenArchivo is { Length: > 0 })
@@ -384,6 +506,17 @@ public class ProyectosController(
             proyecto.FechaRevision = null;
             proyecto.IdUsuarioRevisor = null;
             proyecto.FechaSolicitud = DateTime.UtcNow;
+            if (proyecto.IdUsuarioOrganizador.HasValue)
+            {
+                dbContext.Notificaciones.Add(new Notificacion
+                {
+                    IdUsuario = proyecto.IdUsuarioOrganizador.Value,
+                    IdProyecto = proyecto.IdProyecto,
+                    Titulo = $"Solicitud de proyecto actualizada: {proyecto.Nombre}",
+                    Mensaje = $"{User.Identity?.Name ?? "Un estudiante"} actualizó el proyecto y requiere una nueva revisión.",
+                    FechaCreacion = DateTime.UtcNow
+                });
+            }
         }
 
         await dbContext.SaveChangesAsync();
@@ -586,7 +719,7 @@ public class ProyectosController(
             return NotFound();
         }
 
-        if (!await PuedeEditarProyectoAsync(proyecto, usuarioId))
+        if (proyecto.IdUsuarioOrganizador != usuarioId)
         {
             return RedirectToAction("AccesoDenegado", "Cuenta");
         }
@@ -646,7 +779,279 @@ public class ProyectosController(
         await dbContext.SaveChangesAsync();
 
         TempData["Mensaje"] = "El proyecto fue eliminado de tu panel. Se notificó al creador y a sus asistentes.";
-        return RedirectToAction("Index", "Solicitudes");
+        return RedirectToAction("MisEventos", "Eventos");
+    }
+
+    [Authorize]
+    [HttpGet]
+    public async Task<IActionResult> Participacion(int id)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
+        {
+            return Challenge();
+        }
+
+        var proyecto = await dbContext.Proyectos
+            .AsNoTracking()
+            .Include(p => p.Carrera)
+            .Include(p => p.Creador)
+            .Include(p => p.Organizador)
+            .FirstOrDefaultAsync(p => p.IdProyecto == id);
+
+        if (proyecto is null)
+        {
+            return NotFound();
+        }
+
+        if (!await PuedeEditarProyectoAsync(proyecto, usuarioId))
+        {
+            return RedirectToAction("AccesoDenegado", "Cuenta");
+        }
+
+        var registros = await dbContext.RegistrosProyectos
+            .AsNoTracking()
+            .Where(r => r.IdProyecto == id && r.Estado != EstadoRegistroProyecto.Rechazado)
+            .ToListAsync();
+
+        var idsInscritos = registros.Select(r => r.IdUsuario).ToHashSet();
+        var fechasAcreditacion = registros
+            .Where(r => r.FechaRevision.HasValue)
+            .ToDictionary(r => r.IdUsuario, r => r.FechaRevision);
+
+        var idsInteresados = await dbContext.InteresesProyectos
+            .AsNoTracking()
+            .Where(i => i.IdProyecto == id)
+            .Select(i => i.IdUsuario)
+            .ToHashSetAsync();
+
+        var idsParticipantes = idsInscritos.Union(idsInteresados).ToHashSet();
+
+        var usuarios = await dbContext.Usuarios
+            .AsNoTracking()
+            .Include(u => u.Carrera)
+            .Where(u => idsParticipantes.Contains(u.IdUsuario))
+            .OrderBy(u => u.ApellidoPaterno)
+            .ThenBy(u => u.Nombres)
+            .ToListAsync();
+
+        var usuariosDisponibles = await dbContext.Usuarios
+            .AsNoTracking()
+            .Include(u => u.Carrera)
+            .Where(u =>
+                u.Activo &&
+                !idsParticipantes.Contains(u.IdUsuario) &&
+                u.IdUsuario != proyecto.IdUsuarioCreador &&
+                u.IdUsuario != proyecto.IdUsuarioOrganizador)
+            .OrderBy(u => u.Nombres)
+            .ThenBy(u => u.ApellidoPaterno)
+            .Select(u => new
+            {
+                u.IdUsuario,
+                Etiqueta = $"{u.Nombres} {u.ApellidoPaterno} {u.ApellidoMaterno}".Trim() +
+                           $" — {u.Correo}" +
+                           (u.Carrera != null ? $" ({u.Carrera.Nombre})" : "")
+            })
+            .ToListAsync();
+
+        ViewBag.UsuariosDisponibles = new SelectList(usuariosDisponibles, "IdUsuario", "Etiqueta");
+
+        var modelo = new ListaParticipacionProyectoViewModel
+        {
+            Proyecto = proyecto,
+            Participantes = usuarios.Select(usuario => new ParticipanteAsistenciaViewModel
+            {
+                IdUsuario = usuario.IdUsuario,
+                NombreCompleto = string.Join(" ", new[]
+                {
+                    usuario.Nombres,
+                    usuario.ApellidoPaterno,
+                    usuario.ApellidoMaterno
+                }.Where(nombre => !string.IsNullOrWhiteSpace(nombre))),
+                Correo = usuario.Correo,
+                Carrera = usuario.Carrera?.Nombre ?? "General",
+                Inscrito = idsInscritos.Contains(usuario.IdUsuario),
+                Interesado = idsInteresados.Contains(usuario.IdUsuario),
+                Asistio = fechasAcreditacion.ContainsKey(usuario.IdUsuario),
+                FechaAcreditacion = fechasAcreditacion.GetValueOrDefault(usuario.IdUsuario)
+            }).ToList()
+        };
+
+        return View("~/Views/Organizador/ControlParticipacionProyecto.cshtml", modelo);
+    }
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> GuardarParticipacion(int id, List<int>? usuariosParticiparon)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
+        {
+            return Challenge();
+        }
+
+        var proyecto = await dbContext.Proyectos
+            .FirstOrDefaultAsync(p => p.IdProyecto == id);
+        if (proyecto is null)
+        {
+            return NotFound();
+        }
+
+        if (!await PuedeEditarProyectoAsync(proyecto, usuarioId))
+        {
+            return RedirectToAction("AccesoDenegado", "Cuenta");
+        }
+
+        if (DateTime.Today < proyecto.FechaInicio.Date)
+        {
+            TempData["Mensaje"] = $"El pase de participación estará disponible a partir del día de inicio del proyecto ({proyecto.FechaInicio:dd/MM/yyyy}).";
+            return RedirectToAction(nameof(Participacion), new { id });
+        }
+
+        var registrosActuales = await dbContext.RegistrosProyectos
+            .Where(r => r.IdProyecto == id)
+            .ToListAsync();
+
+        var idsInteresados = await dbContext.InteresesProyectos
+            .Where(i => i.IdProyecto == id)
+            .Select(i => i.IdUsuario)
+            .ToListAsync();
+
+        var idsParticipantesSet = registrosActuales
+            .Where(r => r.Estado != EstadoRegistroProyecto.Rechazado)
+            .Select(r => r.IdUsuario)
+            .Union(idsInteresados)
+            .ToHashSet();
+
+        var idsQueParticiparon = (usuariosParticiparon ?? new List<int>()).ToHashSet();
+        if (!idsQueParticiparon.IsSubsetOf(idsParticipantesSet))
+        {
+            return BadRequest();
+        }
+
+        var ahora = DateTime.UtcNow;
+        var porUsuario = registrosActuales.ToDictionary(r => r.IdUsuario);
+
+        foreach (var idParticipante in idsParticipantesSet)
+        {
+            var acreditado = idsQueParticiparon.Contains(idParticipante);
+            if (porUsuario.TryGetValue(idParticipante, out var registroExistente))
+            {
+                if (acreditado)
+                {
+                    registroExistente.Estado = EstadoRegistroProyecto.Aceptado;
+                    registroExistente.FechaRevision ??= ahora;
+                    registroExistente.IdUsuarioRevisor = usuarioId;
+                }
+                else
+                {
+                    registroExistente.FechaRevision = null;
+                    registroExistente.IdUsuarioRevisor = null;
+                }
+            }
+            else if (acreditado)
+            {
+                dbContext.RegistrosProyectos.Add(new RegistroProyecto
+                {
+                    IdProyecto = id,
+                    IdUsuario = idParticipante,
+                    FechaRegistro = ahora,
+                    Estado = EstadoRegistroProyecto.Aceptado,
+                    FechaRevision = ahora,
+                    IdUsuarioRevisor = usuarioId
+                });
+            }
+        }
+
+        await dbContext.SaveChangesAsync();
+        TempData["Mensaje"] = $"Se guardó la participación acreditada de {idsQueParticiparon.Count} {(idsQueParticiparon.Count == 1 ? "persona" : "personas")}.";
+        return RedirectToAction(nameof(Participacion), new { id });
+    }
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AgregarParticipanteDirecto(int id, int? idUsuario, string? busquedaUsuario)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioActualId))
+        {
+            return Challenge();
+        }
+
+        var proyecto = await dbContext.Proyectos.FirstOrDefaultAsync(p => p.IdProyecto == id);
+        if (proyecto is null)
+        {
+            return NotFound();
+        }
+
+        if (!await PuedeEditarProyectoAsync(proyecto, usuarioActualId))
+        {
+            return RedirectToAction("AccesoDenegado", "Cuenta");
+        }
+
+        if (DateTime.Today < proyecto.FechaInicio.Date)
+        {
+            TempData["Mensaje"] = $"El pase de participación estará disponible a partir del día de inicio del proyecto ({proyecto.FechaInicio:dd/MM/yyyy}).";
+            return RedirectToAction(nameof(Participacion), new { id });
+        }
+
+        Usuario? usuario = null;
+        if (idUsuario.HasValue && idUsuario.Value > 0)
+        {
+            usuario = await dbContext.Usuarios
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.IdUsuario == idUsuario.Value && u.Activo);
+        }
+
+        if (usuario is null && !string.IsNullOrWhiteSpace(busquedaUsuario))
+        {
+            var termino = busquedaUsuario.Trim();
+            var candidatos = await dbContext.Usuarios
+                .AsNoTracking()
+                .Include(u => u.Carrera)
+                .Where(u =>
+                    u.Activo &&
+                    u.IdUsuario != proyecto.IdUsuarioCreador &&
+                    u.IdUsuario != proyecto.IdUsuarioOrganizador)
+                .ToListAsync();
+
+            usuario = candidatos.FirstOrDefault(u =>
+                string.Equals(u.Correo, termino, StringComparison.OrdinalIgnoreCase) ||
+                termino.Contains(u.Correo, StringComparison.OrdinalIgnoreCase) ||
+                $"{u.Nombres} {u.ApellidoPaterno} {u.ApellidoMaterno}".Trim().Contains(termino, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (usuario is null)
+        {
+            TempData["Mensaje"] = "No se encontró un usuario activo con ese nombre o correo. Selecciónalo de las sugerencias al escribir.";
+            return RedirectToAction(nameof(Participacion), new { id });
+        }
+
+        var ahora = DateTime.UtcNow;
+        var registro = await dbContext.RegistrosProyectos
+            .FirstOrDefaultAsync(r => r.IdProyecto == id && r.IdUsuario == usuario.IdUsuario);
+
+        if (registro is null)
+        {
+            dbContext.RegistrosProyectos.Add(new RegistroProyecto
+            {
+                IdProyecto = id,
+                IdUsuario = usuario.IdUsuario,
+                FechaRegistro = ahora,
+                Estado = EstadoRegistroProyecto.Aceptado,
+                FechaRevision = ahora,
+                IdUsuarioRevisor = usuarioActualId
+            });
+        }
+        else
+        {
+            registro.Estado = EstadoRegistroProyecto.Aceptado;
+            registro.FechaRevision = ahora;
+            registro.IdUsuarioRevisor = usuarioActualId;
+        }
+
+        await dbContext.SaveChangesAsync();
+        TempData["Mensaje"] = $"Se agregó y acreditó la participación de {usuario.Nombres} {usuario.ApellidoPaterno}.";
+        return RedirectToAction(nameof(Participacion), new { id });
     }
 
     private async Task<bool> PuedeEditarProyectoAsync(Proyecto proyecto, int usuarioId)

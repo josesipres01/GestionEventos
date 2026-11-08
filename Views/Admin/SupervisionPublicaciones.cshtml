@@ -59,7 +59,7 @@
                         {
                             var org = evento.Organizador is not null
                                 ? $"{evento.Organizador.Nombres} {evento.Organizador.ApellidoPaterno}".Trim()
-                                : "UNISON";
+                                : "Comunidad";
                             var totalInscritos = evento.Registros?.Count ?? 0;
 
                             <tr>
@@ -172,9 +172,16 @@
                                 <td>@(proyecto.Carrera?.Nombre ?? "General")</td>
                                 <td>@organizador</td>
                                 <td>@autor</td>
-                                <td>@totalColab</td>
+                                <td>
+                                    <a asp-controller="Proyectos" asp-action="Participacion" asp-route-id="@proyecto.IdProyecto" class="nexo-link-underline small">
+                                        @totalColab @(totalColab == 1 ? "colaborador" : "colaboradores")
+                                    </a>
+                                </td>
                                 <td class="text-end">
                                     <div class="d-inline-flex gap-2 align-items-center">
+                                        <a asp-controller="Proyectos" asp-action="Participacion" asp-route-id="@proyecto.IdProyecto" class="btn-nexo-outline py-1 px-3 small">
+                                            Participación
+                                        </a>
                                         <a asp-controller="Proyectos" asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="btn-nexo-outline py-1 px-3 small">
                                             Ver detalle
                                         </a>

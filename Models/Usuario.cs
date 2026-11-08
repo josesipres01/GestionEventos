@@ -40,6 +40,7 @@ public class Usuario
     public ICollection<Evento> EventosOrganizados { get; set; } = new List<Evento>();
     public ICollection<Proyecto> Proyectos { get; set; } = new List<Proyecto>();
     public ICollection<Registro> Registros { get; set; } = new List<Registro>();
+    public ICollection<AsistenciaEvento> AsistenciasEventos { get; set; } = new List<AsistenciaEvento>();
     public ICollection<RegistroProyecto> RegistrosProyectos { get; set; } = new List<RegistroProyecto>();
     public ICollection<InteresEvento> InteresesEventos { get; set; } = new List<InteresEvento>();
     public ICollection<InteresProyecto> InteresesProyectos { get; set; } = new List<InteresProyecto>();

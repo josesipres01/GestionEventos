@@ -6,13 +6,20 @@
     var proyectosInteresadosIds = ViewBag.ProyectosInteresadosIds as HashSet<int> ?? new HashSet<int>();
     var usuarioActualId = ViewBag.UsuarioActualId as int? ?? 0;
     var esAdmin = User.IsInRole("Administrador") || User.IsInRole("Admin");
-    var carrerasPresentes = proyectos
-        .Where(p => p.Carrera is not null)
-        .Select(p => p.Carrera.Nombre)
-        .Distinct()
-        .OrderBy(nombre => nombre)
+    var proyectosPropios = usuarioActualId > 0
+        ? proyectos.Where(proyecto =>
+            proyecto.IdUsuarioCreador == usuarioActualId ||
+            proyecto.IdUsuarioOrganizador == usuarioActualId).ToList()
+        : new List<Proyecto>();
+    var proyectosDeOtros = proyectos
+        .Except(proyectosPropios)
         .ToList();
-
+    var proyectosDisponibles = proyectosDeOtros
+        .Where(proyecto => !proyectosRegistradosIds.Contains(proyecto.IdProyecto))
+        .ToList();
+    var proyectosEnLosQueParticipa = proyectosDeOtros
+        .Where(proyecto => proyectosRegistradosIds.Contains(proyecto.IdProyecto))
+        .ToList();
     string[] imagenesProyectos =
     [
         "/img/proyecto-1.svg",
@@ -41,9 +48,9 @@
 
         <div class="nexo-catalog-header">
             <div>
-                <h1 class="nexo-section-title">Proyectos desarrollados en el campus</h1>
+                <h1 class="nexo-section-title">Encuentra un proyecto para colaborar</h1>
                 <p class="text-muted mt-2 mb-0">
-                    Haz clic en cualquier proyecto para conocer su descripción completa y registrarte como colaborador.
+                    Distingue tus proyectos de los de la comunidad y únete a una iniciativa con un solo paso.
                 </p>
             </div>
 
@@ -72,42 +79,85 @@
     }
 
     <div class="nexo-filter-bar">
-        <div class="nexo-filter-pills" role="tablist" aria-label="Filtrar por carrera">
-            <button type="button" class="nexo-pill active" data-nexo-filter="todo">Todas las carreras</button>
-            @foreach (var carrera in carrerasPresentes)
-            {
-                <button type="button" class="nexo-pill" data-nexo-filter="@carrera.ToLowerInvariant()">@carrera</button>
-            }
-        </div>
+        <form asp-action="Index" method="get" class="nexo-catalog-filters">
+            <label>
+                <span>Carrera</span>
+                <select name="idCarrera" class="nexo-select">
+                    <option value="0" selected="@(ViewBag.IdCarreraSeleccionada is null)">Todas las carreras</option>
+                    @foreach (var carrera in (ViewBag.Carreras as List<Carrera> ?? new List<Carrera>()))
+                    {
+                        <option value="@carrera.IdCarrera" selected="@(ViewBag.IdCarreraSeleccionada as int? == carrera.IdCarrera)">
+                            @carrera.Nombre
+                        </option>
+                    }
+                </select>
+            </label>
+            <label>
+                <span>Desde</span>
+                <input type="date" name="fechaDesde" class="nexo-input" value="@ViewBag.FechaDesde" />
+            </label>
+            <label>
+                <span>Hasta</span>
+                <input type="date" name="fechaHasta" class="nexo-input" value="@ViewBag.FechaHasta" />
+            </label>
+            <div class="d-flex align-items-center gap-2">
+                <button type="submit" class="btn-nexo-primary">Aplicar filtros</button>
+                <a asp-action="Index" class="btn-nexo-outline">Limpiar</a>
+            </div>
+        </form>
 
-        <div class="d-flex align-items-center gap-3">
-            <span class="nexo-count-label"
-                  data-nexo-counter
-                  data-singular="proyecto"
-                  data-plural="proyectos">
-                @proyectos.Count @(proyectos.Count == 1 ? "proyecto" : "proyectos")
-            </span>
-
+        <div class="nexo-filter-toolbar">
             @if (User.Identity?.IsAuthenticated == true)
             {
-                <a asp-action="Crear" class="btn-nexo-primary">
-                    <span>+ Publicar proyecto</span>
-                </a>
+                <div class="nexo-filter-pills" role="group" aria-label="Filtrar proyectos por relación">
+                    <button type="button" class="nexo-pill active" data-nexo-project-filter="todos" aria-pressed="true">
+                        Todos (@proyectos.Count)
+                    </button>
+                    <button type="button" class="nexo-pill" data-nexo-project-filter="propios" aria-pressed="false">
+                        A mi cargo (@proyectosPropios.Count)
+                    </button>
+                    <button type="button" class="nexo-pill" data-nexo-project-filter="disponibles" aria-pressed="false">
+                        Disponibles (@proyectosDisponibles.Count)
+                    </button>
+                    <button type="button" class="nexo-pill" data-nexo-project-filter="participando" aria-pressed="false">
+                        Estoy participando (@proyectosEnLosQueParticipa.Count)
+                    </button>
+                </div>
             }
             else
             {
-                <a asp-controller="Cuenta" asp-action="IniciarSesion" class="btn-nexo-outline">
-                    Inicia sesión para publicar
-                </a>
+                <div></div>
             }
+
+            <div class="d-flex align-items-center gap-3">
+                <span class="nexo-count-label"
+                      data-nexo-counter
+                      data-singular="proyecto"
+                      data-plural="proyectos">
+                    @proyectos.Count @(proyectos.Count == 1 ? "proyecto" : "proyectos")
+                </span>
+
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <a asp-action="Crear" class="btn-nexo-primary">
+                        <span>+ Publicar proyecto</span>
+                    </a>
+                }
+                else
+                {
+                    <a asp-controller="Cuenta" asp-action="IniciarSesion" class="btn-nexo-outline">
+                        Inicia sesión para publicar
+                    </a>
+                }
+            </div>
         </div>
     </div>
 
     @if (!proyectos.Any())
     {
         <div class="nexo-empty">
-            <h2 class="h5 fw-bold mb-2">Aún no hay proyectos publicados</h2>
-            <p class="text-muted mb-4">Comparte tu proyecto académico y conecta con estudiantes e investigadores de tu carrera.</p>
+            <h2 class="h5 fw-bold mb-2">No hay proyectos con estos filtros</h2>
+            <p class="text-muted mb-4">Cambia la carrera o las fechas para encontrar más iniciativas.</p>
             <a asp-action="Crear" class="btn-nexo-primary">+ Publicar primer proyecto</a>
         </div>
     }
@@ -131,6 +181,8 @@
                 var iniciales = ObtenerIniciales(nombreOrganizador);
                 var estaRegistrado = proyectosRegistradosIds.Contains(proyecto.IdProyecto);
                 var estaInteresado = proyectosInteresadosIds.Contains(proyecto.IdProyecto);
+                var esPropio = usuarioActualId > 0 &&
+                    (proyecto.IdUsuarioCreador == usuarioActualId || proyecto.IdUsuarioOrganizador == usuarioActualId);
                 var puedeEditar = esAdmin || (usuarioActualId > 0 &&
                     (proyecto.IdUsuarioCreador == usuarioActualId || proyecto.IdUsuarioOrganizador == usuarioActualId));
                 var totalColaboradores = proyecto.Registros?.Count(r => r.Estado != EstadoRegistroProyecto.Rechazado) ?? 0;
@@ -141,15 +193,27 @@
                 <article class="nexo-card"
                          data-nexo-item
                          data-nexo-type="@nombreCarrera.ToLowerInvariant()"
+                         data-nexo-owner="@(esPropio ? "propio" : "otro")"
+                         data-nexo-participando="@(!esPropio && estaRegistrado ? "true" : "false")"
                          data-nexo-keywords="@palabrasClave">
                     <a asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="nexo-card-media d-block text-decoration-none">
-                        <span class="nexo-badge-type badge-proyecto">PROYECTO</span>
+                        <span class="nexo-badge-type badge-proyecto">@(esPropio ? "A MI CARGO" : "DE LA COMUNIDAD")</span>
                         <img src="@imagenUrl" alt="@proyecto.Nombre" loading="lazy" />
                         <span class="nexo-card-index">@numeroTexto</span>
                     </a>
 
                     <div class="nexo-card-body">
                         <div class="nexo-card-category">@nombreCarrera</div>
+                        @if (estaRegistrado && !esPropio)
+                        {
+                            <span class="badge text-bg-success align-self-start mb-2">✓ Ya participas</span>
+                        }
+                        else if (esPropio)
+                        {
+                            <span class="badge text-bg-light align-self-start mb-2">
+                                @(proyecto.IdUsuarioCreador == usuarioActualId ? "Creado por ti" : "Responsable del proyecto")
+                            </span>
+                        }
                         <h2 class="nexo-card-title">
                             <a asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="nexo-card-link">
                                 @proyecto.Nombre
@@ -186,7 +250,7 @@
                             @if (proyecto.Cupo.HasValue)
                             {
                                 <span class="nexo-meta-item" title="Cupo máximo de colaboradores">
-                                    <span>Cupo @totalColaboradores/@proyecto.Cupo</span>
+                                    <span>Cupo máx: @proyecto.Cupo</span>
                                 </span>
                             }
                         </div>
@@ -200,16 +264,19 @@
                             <div class="d-flex align-items-center gap-2">
                                 @if (User.Identity?.IsAuthenticated == true)
                                 {
-                                    <form asp-action="AlternarInteres" asp-route-id="@proyecto.IdProyecto" method="post" class="m-0">
-                                        <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
-                                        <button type="submit"
-                                                class="btn-nexo-heart @(estaInteresado ? "is-interested" : "")"
-                                                aria-label="@(estaInteresado ? "Quitar de mis intereses" : "Marcar que me interesa")"
-                                                aria-pressed="@estaInteresado">
-                                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"></path></svg>
-                                            <span>@proyecto.Intereses.Count</span>
-                                        </button>
-                                    </form>
+                                    if (!esPropio)
+                                    {
+                                        <form asp-action="AlternarInteres" asp-route-id="@proyecto.IdProyecto" method="post" class="m-0">
+                                            <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                                            <button type="submit"
+                                                    class="btn-nexo-heart @(estaInteresado ? "is-interested" : "")"
+                                                    aria-label="@(estaInteresado ? "Quitar de mis intereses" : "Marcar que me interesa")"
+                                                    aria-pressed="@estaInteresado">
+                                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"></path></svg>
+                                                <span>@proyecto.Intereses.Count</span>
+                                            </button>
+                                        </form>
+                                    }
                                 }
                                 else
                                 {
@@ -228,11 +295,15 @@
                                         Editar
                                     </a>
                                 }
-                                @if (User.Identity?.IsAuthenticated == true)
+                                @if (esPropio)
+                                {
+                                    <span class="btn-nexo-registered" title="No puedes unirte a un proyecto que creaste o supervisas">Tu proyecto</span>
+                                }
+                                else if (User.Identity?.IsAuthenticated == true)
                                 {
                                     if (estaRegistrado)
                                     {
-                                        <span class="btn-nexo-registered">✓ Inscrito</span>
+                                        <span class="btn-nexo-registered">✓ Participando</span>
                                     }
                                     else if (cupoCompleto)
                                     {
@@ -241,12 +312,20 @@
                                     else
                                     {
                                         <form asp-action="RegistrarInteres" asp-route-id="@proyecto.IdProyecto" method="post" class="m-0">
-                                            <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
-                                            <button type="submit" class="btn-nexo-interest">
-                                                <span>Inscribirme</span>
+                                            <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                                            <button type="submit" class="btn-nexo-primary py-2 px-3">
+                                                <span>Unirme al proyecto</span>
                                             </button>
                                         </form>
                                     }
+                                }
+                                else
+                                {
+                                    <a asp-controller="Cuenta" asp-action="IniciarSesion"
+                                       asp-route-returnUrl="@Context.Request.Path"
+                                       class="btn-nexo-primary py-2 px-3">
+                                        Inicia sesión para participar
+                                    </a>
                                 }
 
                                 <a asp-action="Detalle"

@@ -37,10 +37,18 @@ public class SolicitudesController(GestionEventosDbContext dbContext) : Controll
                 proyecto.IdUsuarioOrganizador == usuarioId)
             .ToListAsync();
 
+        var notificaciones = await dbContext.Notificaciones
+            .AsNoTracking()
+            .Where(notificacion => notificacion.IdUsuario == usuarioId && !notificacion.Leida)
+            .OrderByDescending(notificacion => notificacion.FechaCreacion)
+            .Take(10)
+            .ToListAsync();
+
         var puedeRevisarSolicitudes = await EsOrganizadorActivoAsync(usuarioId);
         var modelo = new SolicitudesViewModel
         {
             PuedeRevisarSolicitudes = puedeRevisarSolicitudes,
+            Notificaciones = notificaciones,
             MisSolicitudes = eventos
                 .Where(evento => evento.IdUsuarioSolicitante == usuarioId && evento.Activo)
                 .Select(evento => new SolicitudPublicacionViewModel
@@ -151,7 +159,11 @@ public class SolicitudesController(GestionEventosDbContext dbContext) : Controll
                 : new List<SolicitudPublicacionViewModel>()
         };
 
-        return View(modelo);
+        return View(
+            modelo.PuedeRevisarSolicitudes
+                ? "~/Views/Organizador/BandejaRevisionSolicitudes.cshtml"
+                : "~/Views/Estudiante/EstadoMisSolicitudes.cshtml",
+            modelo);
     }
 
     [HttpPost]

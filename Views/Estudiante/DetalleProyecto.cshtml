@@ -4,10 +4,16 @@
     var estaRegistrado = ViewBag.EstaRegistrado as bool? ?? false;
     var estaInteresado = ViewBag.EstaInteresado as bool? ?? false;
     var puedeEditar = ViewBag.PuedeEditar as bool? ?? false;
+    var esEstudiante = ViewBag.EsEstudiante as bool? ?? User.IsInRole("Estudiante");
+    var esProyectoPropio = ViewBag.EsProyectoPropio as bool? ?? false;
+    var idsConParticipacion = ViewBag.IdsConParticipacion as HashSet<int> ?? new HashSet<int>();
     var registros = Model.Registros
         .Where(r => r.Estado != EstadoRegistroProyecto.Rechazado)
         .OrderByDescending(r => r.FechaRegistro)
         .ToList();
+    var totalParticipacionesAcreditadas = registros.Count(r => idsConParticipacion.Contains(r.IdUsuario));
+    var puedePasarListaProyecto = DateTime.Today >= Model.FechaInicio.Date;
+    var proyectoCerrado = DateTime.Today >= Model.FechaFin.Date;
     var cupoCompleto = Model.Cupo.HasValue && registros.Count >= Model.Cupo.Value;
 
     var autorNombre = string.Join(
@@ -48,9 +54,21 @@
         <a asp-controller="Proyectos" asp-action="Index" class="btn-nexo-outline">
             ← Volver a proyectos
         </a>
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex flex-wrap align-items-center gap-2">
             @if (puedeEditar && Model.Activo)
             {
+                if (puedePasarListaProyecto)
+                {
+                    <a asp-controller="Proyectos" asp-action="Participacion" asp-route-id="@Model.IdProyecto" class="btn-nexo-primary">
+                        ✓ Registrar participación (@totalParticipacionesAcreditadas/@registros.Count)
+                    </a>
+                }
+                else
+                {
+                    <a asp-controller="Proyectos" asp-action="Participacion" asp-route-id="@Model.IdProyecto" class="btn-nexo-outline" title="El pase de participación se habilita el día de inicio del proyecto">
+                        ⏳ Pase disponible el @Model.FechaInicio.ToString("dd/MM/yyyy")
+                    </a>
+                }
                 <a asp-controller="Proyectos" asp-action="Editar" asp-route-id="@Model.IdProyecto" class="btn-nexo-outline">
                     ✎ Editar proyecto
                 </a>
@@ -84,8 +102,8 @@
                 <span class="badge bg-light text-dark fw-bold px-3 py-2 text-uppercase" style="border-left: 4px solid var(--nexo-violet);">
                     PROYECTO ACADÉMICO
                 </span>
-                <span class="badge rounded-pill px-3 py-2" style="background-color: rgba(215, 242, 90, 0.2); color: var(--nexo-lime);">
-                    @(Model.Carrera?.Nombre ?? "Universidad de Sonora")
+                <span class="badge px-3 py-2" style="background-color: rgba(215, 242, 90, 0.2); color: var(--nexo-lime);">
+                    @(Model.Carrera?.Nombre ?? "Comunidad Universitaria")
                 </span>
             </div>
 
@@ -97,6 +115,10 @@
                 <span><strong>Periodo:</strong> <span class="text-white">@Model.FechaInicio.ToString("dd MMM yyyy") – @Model.FechaFin.ToString("dd MMM yyyy")</span></span>
                 <span><strong>Colaboradores inscritos:</strong> <span class="text-white">@registros.Count</span></span>
                 <span><strong>Personas interesadas:</strong> <span class="text-white">@Model.Intereses.Count</span></span>
+                @if (Model.Cupo.HasValue)
+                {
+                    <span><strong>Cupo máximo:</strong> <span class="text-white">@Model.Cupo</span></span>
+                }
             </div>
         </div>
     </header>
@@ -129,29 +151,55 @@
                         </p>
                     </div>
 
-                    @if (registros.Any())
-                    {
-                        <div class="nexo-search-box" style="min-width: 230px;">
-                            <span class="nexo-search-icon" aria-hidden="true">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="11" cy="11" r="8"></circle>
-                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                                </svg>
-                            </span>
-                            <input type="search"
-                                   class="nexo-search-input"
-                                   placeholder="Buscar persona o carrera..."
-                                   aria-label="Buscar entre las personas registradas"
-                                   data-nexo-search />
-                        </div>
-                    }
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        @if (puedeEditar && Model.Activo && puedePasarListaProyecto)
+                        {
+                            <a asp-controller="Proyectos"
+                               asp-action="Participacion"
+                               asp-route-id="@Model.IdProyecto"
+                               class="btn-nexo-interest text-decoration-none">
+                                ✓ Pasar lista / Acreditar participación →
+                            </a>
+                        }
+                        @if (registros.Any())
+                        {
+                            <div class="nexo-search-box" style="min-width: 230px;">
+                                <span class="nexo-search-icon" aria-hidden="true">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="11" cy="11" r="8"></circle>
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                    </svg>
+                                </span>
+                                <input type="search"
+                                       class="nexo-search-input"
+                                       placeholder="Buscar persona o carrera..."
+                                       aria-label="Buscar entre las personas registradas"
+                                       data-nexo-search />
+                            </div>
+                        }
+                    </div>
                 </div>
 
                 @if (!registros.Any())
                 {
                     <div class="nexo-empty py-4">
                         <p class="fw-semibold mb-1">Aún no hay colaboradores inscritos en este proyecto.</p>
-                        <p class="text-muted small mb-0">¡Anímate a ser la primera persona en registrarte y colaborar!</p>
+                        @if (puedeEditar && Model.Activo)
+                        {
+                            <p class="text-muted small mb-3">
+                                Puedes abrir la sección de <strong>Registro de participación</strong> para acreditar colaboradores o agregar directamente a quienes participaron en este proyecto.
+                            </p>
+                            <a asp-controller="Proyectos"
+                               asp-action="Participacion"
+                               asp-route-id="@Model.IdProyecto"
+                               class="btn-nexo-primary">
+                                ✓ Abrir registro de participación →
+                            </a>
+                        }
+                        else
+                        {
+                            <p class="text-muted small mb-0">¡Anímate a ser la primera persona en registrarte y colaborar!</p>
+                        }
                     </div>
                 }
                 else
@@ -162,10 +210,11 @@
                             var persona = reg.Usuario;
                             var nombrePersona = persona is not null
                                 ? string.Join(" ", new[] { persona.Nombres, persona.ApellidoPaterno, persona.ApellidoMaterno }.Where(s => !string.IsNullOrWhiteSpace(s)))
-                                : "Estudiante UNISON";
-                            var carreraPersona = persona?.Carrera?.Nombre ?? "Comunidad UNISON";
+                                : "Estudiante";
+                            var carreraPersona = persona?.Carrera?.Nombre ?? "Comunidad Universitaria";
                             var iniciales = ObtenerIniciales(nombrePersona);
                             var palabrasBusqueda = $"{nombrePersona} {carreraPersona}";
+                            var participacionAcreditada = idsConParticipacion.Contains(reg.IdUsuario);
 
                             <div class="nexo-attendee-card"
                                  data-nexo-item
@@ -173,7 +222,13 @@
                                  data-nexo-keywords="@palabrasBusqueda">
                                 <span class="nexo-avatar-lg">@iniciales</span>
                                 <div class="min-w-0">
-                                    <div class="fw-bold text-truncate">@nombrePersona</div>
+                                    <div class="d-flex flex-wrap align-items-center gap-1">
+                                        <span class="fw-bold text-truncate">@nombrePersona</span>
+                                        @if (participacionAcreditada)
+                                        {
+                                            <span class="badge text-bg-success" style="font-size: 0.68rem;">✓ Participación acreditada</span>
+                                        }
+                                    </div>
                                     <div class="text-muted small text-truncate">@carreraPersona</div>
                                     <div class="text-muted" style="font-size: 0.74rem;">
                                         Se unió el @reg.FechaRegistro.ToLocalTime().ToString("dd MMM yyyy")
@@ -188,6 +243,37 @@
                     </div>
                 }
             </section>
+
+            @if (puedeEditar && Model.Activo)
+            {
+                <section class="nexo-panel" id="registro-participacion">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                        <div>
+                            <div class="nexo-eyebrow mb-1">
+                                <span class="nexo-eyebrow-dot"></span>
+                                <span>CONTROL DE PARTICIPACIÓN</span>
+                            </div>
+                            <h2 class="h5 fw-bold mb-1">Registro de participación del proyecto</h2>
+                            <p class="text-muted small mb-0">
+                                @(proyectoCerrado
+                                    ? "El periodo del proyecto ha concluido o cierra hoy. Confirma quiénes cumplieron con su participación en el proyecto."
+                                    : "Valida qué estudiantes cumplieron con su participación o agrega colaboradores manualmente al registro de participación.")
+                            </p>
+                        </div>
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <span class="nexo-count-label">
+                                @totalParticipacionesAcreditadas de @registros.Count acreditados
+                            </span>
+                            <a asp-controller="Proyectos"
+                               asp-action="Participacion"
+                               asp-route-id="@Model.IdProyecto"
+                               class="btn-nexo-primary">
+                                ✓ Gestionar participación →
+                            </a>
+                        </div>
+                    </div>
+                </section>
+            }
         </div>
 
         <!-- Columna lateral: Ficha técnica y registro al proyecto -->
@@ -196,7 +282,7 @@
                 <span class="nexo-eyebrow-dot"></span>
                 <span>FICHA DEL PROYECTO</span>
             </div>
-            <h3 class="h5 fw-bold mb-3">Participa en esta iniciativa</h3>
+            <h3 class="h5 fw-bold mb-3">@(esProyectoPropio ? "Tu proyecto" : "Participa en esta iniciativa")</h3>
 
             <dl class="mb-4">
                 <dt class="text-muted small text-uppercase">Carrera o Departamento</dt>
@@ -224,19 +310,57 @@
                 <dd class="fw-semibold mb-0">
                     @registros.Count @(registros.Count == 1 ? "colaborador registrado" : "colaboradores registrados")
                 </dd>
+                <dt class="text-muted small text-uppercase mt-3">Participación acreditada</dt>
+                <dd class="fw-semibold mb-0" style="color: var(--nexo-teal);">
+                    @totalParticipacionesAcreditadas @(totalParticipacionesAcreditadas == 1 ? "persona validada" : "personas validadas")
+                </dd>
                 <dt class="text-muted small text-uppercase mt-3">Personas interesadas</dt>
                 <dd class="fw-semibold mb-0">@Model.Intereses.Count</dd>
                 @if (Model.Cupo.HasValue)
                 {
+                    var disponiblesProyecto = Math.Max(0, Model.Cupo.Value - registros.Count);
                     <dt class="text-muted small text-uppercase mt-3">Cupo máximo</dt>
-                    <dd class="fw-semibold mb-0">@registros.Count de @Model.Cupo</dd>
+                    <dd class="fw-semibold mb-0">@Model.Cupo @(Model.Cupo == 1 ? "colaborador" : "colaboradores") (@disponiblesProyecto @(disponiblesProyecto == 1 ? "lugar disponible" : "lugares disponibles"))</dd>
                 }
             </dl>
 
             @if (Model.Activo && Model.EstadoAprobacion == EstadoAprobacion.Aprobado)
             {
                 <div class="pt-3 border-top">
-                    @if (User.Identity?.IsAuthenticated == true)
+                    @if (esProyectoPropio || puedeEditar)
+                    {
+                        <div class="alert alert-success mb-3" role="status">
+                            Este proyecto está a tu cargo. Puedes gestionar y registrar la participación de los colaboradores desde aquí.
+                        </div>
+                        @if (puedeEditar && Model.Activo)
+                        {
+                            if (puedePasarListaProyecto)
+                            {
+                                <a asp-controller="Proyectos"
+                                   asp-action="Participacion"
+                                   asp-route-id="@Model.IdProyecto"
+                                   class="btn-nexo-primary w-100 justify-content-center mb-2">
+                                    ✓ Registrar participación (@totalParticipacionesAcreditadas/@registros.Count)
+                                </a>
+                            }
+                            else
+                            {
+                                <a asp-controller="Proyectos"
+                                   asp-action="Participacion"
+                                   asp-route-id="@Model.IdProyecto"
+                                   class="btn-nexo-outline w-100 justify-content-center mb-2">
+                                    ⏳ Pase disponible el @Model.FechaInicio.ToString("dd/MM/yyyy")
+                                </a>
+                            }
+                            <a asp-controller="Proyectos"
+                               asp-action="Editar"
+                               asp-route-id="@Model.IdProyecto"
+                               class="btn-nexo-outline w-100 justify-content-center">
+                                Editar mi proyecto
+                            </a>
+                        }
+                    }
+                    else if (User.Identity?.IsAuthenticated == true)
                     {
                         <form asp-controller="Proyectos"
                               asp-action="AlternarInteres"
@@ -255,7 +379,7 @@
                         if (estaRegistrado)
                         {
                             <div class="btn-nexo-registered w-100 justify-content-center py-2 mb-2">
-                                <span>✓ Ya estás registrado en este proyecto</span>
+                                <span>✓ Ya estás participando en este proyecto</span>
                             </div>
                             <form asp-controller="Proyectos"
                                   asp-action="CancelarRegistro"
@@ -281,10 +405,13 @@
                                   method="post">
                                 <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
                                 <button type="submit" class="btn-nexo-primary w-100 justify-content-center py-2">
-                                    <span>Registrarme en el proyecto</span>
+                                    <span>Unirme al proyecto</span>
                                     <span aria-hidden="true">→</span>
                                 </button>
                             </form>
+                            <small class="form-text text-muted d-block mt-2">
+                                Tu participación queda registrada de inmediato. Marcar “Me interesa” solo guarda el proyecto para después.
+                            </small>
                         }
                     }
                     else
@@ -300,7 +427,7 @@
                            asp-action="IniciarSesion"
                            asp-route-returnUrl="@Context.Request.Path"
                            class="btn-nexo-primary w-100 justify-content-center py-2">
-                            <span>Inicia sesión para registrarte</span>
+                            <span>Inicia sesión para participar</span>
                             <span aria-hidden="true">→</span>
                         </a>
                     }
@@ -309,7 +436,7 @@
         </aside>
     </div>
 
-    @if (puedeEditar && Model.Activo)
+    @if (puedeEditar && !esEstudiante && Model.Activo)
     {
         <section class="nexo-panel mt-4">
             <h2 class="h5 fw-bold mb-2">Eliminar proyecto</h2>
@@ -320,17 +447,20 @@
                   asp-action="Eliminar"
                   asp-route-id="@Model.IdProyecto"
                   method="post"
-                  class="d-flex flex-column flex-sm-row align-items-sm-end gap-2">
-                <div class="flex-grow-1">
-                    <label for="motivoEliminacionProyecto" class="form-label">Motivo de eliminación</label>
+                  class="d-flex flex-column gap-3 mt-3">
+                <div>
+                    <label for="motivoEliminacionProyecto" class="nexo-label">Motivo de eliminación</label>
                     <textarea id="motivoEliminacionProyecto"
                               name="motivo"
-                              class="form-control"
+                              class="nexo-textarea"
                               maxlength="1000"
                               rows="2"
+                              placeholder="Explica brevemente el motivo por el que se da de baja este proyecto..."
                               required></textarea>
                 </div>
-                <button type="submit" class="btn-nexo-ghost">Eliminar proyecto</button>
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn-nexo-danger">Eliminar proyecto</button>
+                </div>
             </form>
         </section>
     }

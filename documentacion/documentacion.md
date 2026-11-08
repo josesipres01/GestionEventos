@@ -29,7 +29,8 @@ El esquema se define exclusivamente en las migraciones de EF Core. El archivo [`
 | `EVENTOS` | Publicaciones con organizador, solicitante, revisor, eliminador, fecha de fin, cupo y estado de aprobación controlado. El cupo sigue siendo nullable para publicaciones anteriores. |
 | `PROYECTOS` | Publicaciones con creador, organizador responsable, revisor, eliminador, carrera, cupo máximo y estado de aprobación controlado. |
 | `REGISTROS` | Inscripciones de usuarios a eventos, con fecha; único por usuario y evento. |
-| `REGISTROS_PROYECTOS` | Inscripciones directas de colaboradores con estado y fecha; único por usuario y proyecto. |
+| `ASISTENCIAS_EVENTOS` | Acreditación de participación de usuarios en eventos, con fecha; único por usuario y evento. |
+| `REGISTROS_PROYECTOS` | Inscripciones directas de colaboradores con estado, fecha de registro y acreditación de participación (`FechaRevision` e `IdUsuarioRevisor`); único por usuario y proyecto. |
 | `INTERESES_EVENTOS` | Intereses independientes de las inscripciones; único por usuario y evento. |
 | `INTERESES_PROYECTOS` | Intereses independientes de las inscripciones; único por usuario y proyecto. |
 | `NOTIFICACIONES` | Avisos con fecha y estado de lectura; asociados a un evento, a un proyecto o a ninguno. |

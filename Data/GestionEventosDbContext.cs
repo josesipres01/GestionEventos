@@ -11,6 +11,7 @@ public class GestionEventosDbContext(DbContextOptions<GestionEventosDbContext> o
     public DbSet<Evento> Eventos => Set<Evento>();
     public DbSet<Proyecto> Proyectos => Set<Proyecto>();
     public DbSet<Registro> Registros => Set<Registro>();
+    public DbSet<AsistenciaEvento> AsistenciasEventos => Set<AsistenciaEvento>();
     public DbSet<RegistroProyecto> RegistrosProyectos => Set<RegistroProyecto>();
     public DbSet<InteresEvento> InteresesEventos => Set<InteresEvento>();
     public DbSet<InteresProyecto> InteresesProyectos => Set<InteresProyecto>();
@@ -200,6 +201,28 @@ public class GestionEventosDbContext(DbContextOptions<GestionEventosDbContext> o
         modelBuilder.Entity<Registro>()
             .HasIndex(registro => registro.IdUsuario)
             .HasDatabaseName("IX_REGISTROS_IdUsuario");
+
+        modelBuilder.Entity<AsistenciaEvento>()
+            .HasOne(asistencia => asistencia.Usuario)
+            .WithMany(usuario => usuario.AsistenciasEventos)
+            .HasForeignKey(asistencia => asistencia.IdUsuario)
+            .OnDelete(DeleteBehavior.NoAction)
+            .HasConstraintName("FK_ASISTENCIAS_EVENTOS_USUARIOS");
+
+        modelBuilder.Entity<AsistenciaEvento>()
+            .HasOne(asistencia => asistencia.Evento)
+            .WithMany(evento => evento.Asistencias)
+            .HasForeignKey(asistencia => asistencia.IdEvento)
+            .OnDelete(DeleteBehavior.NoAction)
+            .HasConstraintName("FK_ASISTENCIAS_EVENTOS_EVENTOS");
+
+        modelBuilder.Entity<AsistenciaEvento>()
+            .HasIndex(asistencia => new { asistencia.IdUsuario, asistencia.IdEvento })
+            .IsUnique()
+            .HasDatabaseName("UQ_ASISTENCIAS_EVENTOS_IdUsuario_IdEvento");
+        modelBuilder.Entity<AsistenciaEvento>()
+            .HasIndex(asistencia => asistencia.IdEvento)
+            .HasDatabaseName("IX_ASISTENCIAS_EVENTOS_IdEvento");
 
         modelBuilder.Entity<RegistroProyecto>()
             .HasOne(registro => registro.Usuario)

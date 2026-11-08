@@ -75,8 +75,13 @@ public class CuentaController(
     }
 
     [HttpGet]
-    public IActionResult IniciarSesion(string? returnUrl = null)
+    public async Task<IActionResult> IniciarSesion(string? returnUrl = null)
     {
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        }
+
         ViewData["ReturnUrl"] = returnUrl;
         return View();
     }
@@ -119,6 +124,13 @@ public class CuentaController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CerrarSesion()
     {
+        if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
+        {
+            await dbContext.Notificaciones
+                .Where(n => n.IdUsuario == usuarioId && !n.Leida)
+                .ExecuteUpdateAsync(update => update.SetProperty(n => n.Leida, true));
+        }
+
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return RedirectToAction(nameof(IniciarSesion));
     }

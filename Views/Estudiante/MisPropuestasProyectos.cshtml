@@ -1,0 +1,246 @@
+@model IEnumerable<Proyecto>
+@{
+    ViewData["Title"] = "Mis Propuestas";
+    var propuestas = Model?.ToList() ?? new List<Proyecto>();
+    var usuarioId = ViewBag.UsuarioActualId as int? ?? 0;
+
+    var totalPublicados = propuestas.Count(p => p.Activo && p.EstadoAprobacion == EstadoAprobacion.Aprobado);
+    var totalPendientes = propuestas.Count(p => p.Activo && p.EstadoAprobacion == EstadoAprobacion.Pendiente);
+    var totalInactivos = propuestas.Count(p => !p.Activo);
+
+    static string EstadoTexto(EstadoAprobacion estado, bool activo)
+    {
+        if (!activo)
+        {
+            return "Eliminado";
+        }
+
+        return estado switch
+        {
+            EstadoAprobacion.Aprobado => "Publicado",
+            EstadoAprobacion.Rechazado => "Requiere cambios",
+            _ => "Pendiente de revisión"
+        };
+    }
+
+    static string EstadoClase(EstadoAprobacion estado, bool activo)
+    {
+        if (!activo)
+        {
+            return "text-bg-secondary";
+        }
+
+        return estado switch
+        {
+            EstadoAprobacion.Aprobado => "text-bg-success",
+            EstadoAprobacion.Rechazado => "text-bg-danger",
+            _ => "text-bg-warning"
+        };
+    }
+
+    static string TipoFiltroEstado(EstadoAprobacion estado, bool activo)
+    {
+        if (!activo)
+        {
+            return "eliminado";
+        }
+
+        return estado switch
+        {
+            EstadoAprobacion.Aprobado => "publicado",
+            EstadoAprobacion.Rechazado => "rechazado",
+            _ => "pendiente"
+        };
+    }
+}
+
+<section class="nexo-section">
+    <div class="nexo-eyebrow">
+        <span class="nexo-eyebrow-dot"></span>
+        <span>PANEL DE PROPUESTAS · COMUNIDAD ESTUDIANTIL</span>
+    </div>
+
+    <div class="nexo-catalog-header mb-4">
+        <div>
+            <h1 class="nexo-section-title">Mis Propuestas</h1>
+            <p class="text-muted mt-2 mb-0">
+                Administra los proyectos que has propuesto, consulta su estado de aprobación y revisa quién es el docente u organizador responsable.
+            </p>
+        </div>
+
+        <a asp-action="Crear" class="btn-nexo-primary">+ Crear propuesta</a>
+    </div>
+
+    @if (TempData["Mensaje"] is string mensaje)
+    {
+        <div class="nexo-toast" role="status">
+            <span class="nexo-toast-dot">✓</span>
+            <span>@mensaje</span>
+        </div>
+    }
+
+    @if (propuestas.Count == 0)
+    {
+        <div class="nexo-empty">
+            <h2 class="h5 fw-bold mb-2">Todavía no has creado propuestas</h2>
+            <p class="text-muted mb-4">Publica un proyecto para compartirlo con estudiantes de tu comunidad.</p>
+            <a asp-action="Crear" class="btn-nexo-primary">Crear mi primera propuesta</a>
+        </div>
+    }
+    else
+    {
+        <div class="nexo-filter-bar mt-2 mb-4">
+            <div class="nexo-filter-toolbar">
+                <div class="nexo-filter-pills" role="tablist" aria-label="Filtrar por estado">
+                    <button type="button" class="nexo-pill active" data-nexo-filter="todo">
+                        Todos (@propuestas.Count)
+                    </button>
+                    <button type="button" class="nexo-pill" data-nexo-filter="publicado">
+                        Publicados (@totalPublicados)
+                    </button>
+                    <button type="button" class="nexo-pill" data-nexo-filter="pendiente">
+                        Pendientes (@totalPendientes)
+                    </button>
+                    @if (totalInactivos > 0)
+                    {
+                        <button type="button" class="nexo-pill" data-nexo-filter="eliminado">
+                            Dados de baja (@totalInactivos)
+                        </button>
+                    }
+                </div>
+
+                <div class="d-flex flex-wrap align-items-center gap-3">
+                    <div class="nexo-search-box" style="min-width: 260px;">
+                        <span class="nexo-search-icon" aria-hidden="true">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                        </span>
+                        <input type="search"
+                               class="nexo-search-input"
+                               placeholder="Buscar en mis propuestas..."
+                               aria-label="Buscar proyectos"
+                               data-nexo-search />
+                    </div>
+                    <div class="nexo-count-label"
+                         data-nexo-counter
+                         data-singular="propuesta"
+                         data-plural="propuestas">
+                        @propuestas.Count @(propuestas.Count == 1 ? "propuesta" : "propuestas")
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="nexo-grid">
+            @foreach (var propuesta in propuestas)
+            {
+                var colaboradores = propuesta.Registros.Count(registro => registro.Estado != EstadoRegistroProyecto.Rechazado);
+                var acreditados = propuesta.Registros.Count(registro => registro.Estado != EstadoRegistroProyecto.Rechazado && registro.FechaRevision.HasValue);
+                var nombreOrganizador = propuesta.Organizador is null
+                    ? "Sin asignar"
+                    : $"{propuesta.Organizador.Nombres} {propuesta.Organizador.ApellidoPaterno}".Trim();
+                var estadoFiltro = TipoFiltroEstado(propuesta.EstadoAprobacion, propuesta.Activo);
+                var palabrasClave = $"{propuesta.Nombre} {propuesta.Descripcion} {propuesta.Carrera?.Nombre} {nombreOrganizador} {propuesta.LugarReunion}";
+
+                <article class="nexo-card nexo-proposal-card"
+                         data-nexo-item
+                         data-nexo-type="@estadoFiltro"
+                         data-nexo-keywords="@palabrasClave">
+                    <div class="nexo-card-body">
+                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                            <div>
+                                <div class="nexo-card-category">@propuesta.Carrera?.Nombre</div>
+                                <h2 class="nexo-card-title">@propuesta.Nombre</h2>
+                            </div>
+                            <span class="badge rounded-pill @EstadoClase(propuesta.EstadoAprobacion, propuesta.Activo)">
+                                @EstadoTexto(propuesta.EstadoAprobacion, propuesta.Activo)
+                            </span>
+                        </div>
+                        <p class="nexo-card-desc">@propuesta.Descripcion</p>
+
+                        <dl class="nexo-proposal-meta small">
+                            <dt>Encargado responsable</dt>
+                            <dd>@nombreOrganizador</dd>
+
+                            <dt>Origen</dt>
+                            <dd>Propuesta enviada por ti</dd>
+
+                            <dt>Lugar de reunión</dt>
+                            <dd>@propuesta.LugarReunion</dd>
+
+                            <dt>Periodo</dt>
+                            <dd>@propuesta.FechaInicio.ToString("dd/MM/yyyy") – @propuesta.FechaFin.ToString("dd/MM/yyyy")</dd>
+
+                            <dt>Ocupación / Cupo</dt>
+                            <dd>
+                                @if (propuesta.Cupo.HasValue)
+                                {
+                                    <span>@colaboradores de @propuesta.Cupo @(propuesta.Cupo == 1 ? "persona" : "personas")</span>
+                                }
+                                else
+                                {
+                                    <span>@colaboradores @(colaboradores == 1 ? "colaborador (cupo abierto)" : "colaboradores (cupo abierto)")</span>
+                                }
+                            </dd>
+
+                            <dt>Participación acreditada</dt>
+                            <dd class="fw-semibold" style="color: var(--nexo-teal);">
+                                @acreditados de @colaboradores @(colaboradores == 1 ? "colaborador" : "colaboradores")
+                            </dd>
+
+                            @if (!propuesta.Activo)
+                            {
+                                <dt>Estado de publicación</dt>
+                                <dd class="text-danger fw-semibold">Eliminado (dado de baja)</dd>
+                                @if (!string.IsNullOrWhiteSpace(propuesta.MotivoEliminacion))
+                                {
+                                    <dt>Motivo de baja</dt>
+                                    <dd>@propuesta.MotivoEliminacion</dd>
+                                }
+                            }
+                        </dl>
+
+                        @if (!string.IsNullOrWhiteSpace(propuesta.ComentarioAprobacion) && propuesta.Activo)
+                        {
+                            <div class="alert @(propuesta.EstadoAprobacion == EstadoAprobacion.Rechazado ? "alert-danger" : "alert-success") py-2 px-3 small mb-2">
+                                <strong>Observación de revisión:</strong> @propuesta.ComentarioAprobacion
+                            </div>
+                        }
+
+                        <div class="d-flex flex-wrap gap-2 mt-auto">
+                            @if (propuesta.Activo)
+                            {
+                                if (DateTime.Today >= propuesta.FechaInicio.Date)
+                                {
+                                    <a asp-action="Participacion" asp-route-id="@propuesta.IdProyecto" class="btn-nexo-interest text-decoration-none">
+                                        ✓ Registrar participación (@acreditados/@colaboradores)
+                                    </a>
+                                }
+                                else
+                                {
+                                    <a asp-action="Participacion" asp-route-id="@propuesta.IdProyecto" class="btn-nexo-outline">
+                                        ⏳ Pase el @propuesta.FechaInicio.ToString("dd/MM/yyyy")
+                                    </a>
+                                }
+                                <a asp-action="Detalle" asp-route-id="@propuesta.IdProyecto" class="btn-nexo-outline">
+                                    Ver proyecto
+                                </a>
+                                <a asp-action="Editar" asp-route-id="@propuesta.IdProyecto" class="btn-nexo-outline">
+                                    Editar
+                                </a>
+                                <span class="text-muted small align-self-center w-100 mt-1">Solo el organizador responsable puede dar de baja este proyecto.</span>
+                            }
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+
+        <div class="nexo-empty mt-3" data-nexo-empty-filter style="display: none;">
+            <h3 class="h5 fw-bold mb-1">No se encontraron propuestas con ese filtro</h3>
+            <p class="text-muted mb-0">Prueba seleccionando otro estado o cambiando el término de búsqueda.</p>
+        </div>
+    }
+</section>

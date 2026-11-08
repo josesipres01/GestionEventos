@@ -12,11 +12,12 @@
   --nexo-violet: #5b32d6;
   --nexo-coral: #ef5b42;
   --nexo-sage: #dce9e0;
-  --nexo-radius-lg: 20px;
-  --nexo-radius-md: 14px;
+  --nexo-radius-lg: 22px;
+  --nexo-radius-md: 16px;
   --nexo-radius-pill: 999px;
-  --nexo-shadow: 0 12px 32px rgba(17, 50, 36, 0.06);
-  --nexo-shadow-hover: 0 18px 40px rgba(17, 50, 36, 0.12);
+  --nexo-button-radius: 999px;
+  --nexo-shadow: 0 10px 30px rgba(17, 50, 36, 0.05);
+  --nexo-shadow-hover: 0 18px 42px rgba(17, 50, 36, 0.11);
 }
 
 html {
@@ -34,6 +35,7 @@ body {
   flex-direction: column;
   margin: 0;
   overflow-x: hidden;
+  line-height: 1.55;
 }
 
 main {
@@ -42,22 +44,23 @@ main {
 
 /* Navbar */
 .nexo-header {
-  background-color: rgba(247, 246, 240, 0.92);
-  backdrop-filter: blur(10px);
+  background-color: rgba(247, 246, 240, 0.94);
+  backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
   z-index: 1020;
-  border-bottom: 1px solid rgba(228, 226, 216, 0.7);
+  border-bottom: 1px solid rgba(228, 226, 216, 0.85);
 }
 
 .nexo-navbar {
-  max-width: 1240px;
+  max-width: 1360px;
   margin: 0 auto;
-  padding: 1.1rem 1.5rem;
+  padding: 0.85rem 1.35rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1.5rem;
+  gap: 0.65rem 0.85rem;
+  flex-wrap: nowrap;
 }
 
 .nexo-brand {
@@ -92,66 +95,86 @@ main {
 .nexo-nav-links {
   display: flex;
   align-items: center;
-  gap: 2rem;
+  gap: 0.2rem;
   list-style: none;
   margin: 0;
   padding: 0;
+  flex-wrap: nowrap;
 }
 
 .nexo-nav-link {
   position: relative;
   text-decoration: none;
   color: var(--nexo-muted);
-  font-weight: 500;
-  font-size: 0.95rem;
-  padding: 0.45rem 0;
-  transition: color 0.2s ease;
+  font-weight: 600;
+  font-size: 0.86rem;
+  padding: 0.42rem 0.68rem;
+  border-radius: var(--nexo-radius-pill);
+  white-space: nowrap;
+  transition: color 0.2s ease, background-color 0.2s ease;
 }
 
-.nexo-nav-link:hover,
-.nexo-nav-link.active {
+.nexo-nav-link:hover {
   color: var(--nexo-text);
+  background-color: rgba(17, 50, 36, 0.05);
 }
 
-.nexo-nav-link.active::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -4px;
-  height: 2px;
-  background-color: var(--nexo-forest);
-  border-radius: 2px;
+.nexo-nav-link.active {
+  color: var(--nexo-forest);
+  background-color: var(--nexo-sage);
+  font-weight: 700;
 }
 
 .nexo-nav-actions {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  gap: 0.45rem;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+
+.nexo-nav-actions .btn-nexo-primary,
+.nexo-nav-actions .btn-nexo-outline,
+.nexo-nav-actions .btn-nexo-ghost {
+  padding: 0.44rem 0.88rem;
+  font-size: 0.84rem;
+  white-space: nowrap;
 }
 
 .nexo-user-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
   background-color: var(--nexo-surface);
-  border: 1px solid var(--nexo-border);
+  border: 1.5px solid var(--nexo-border);
   border-radius: var(--nexo-radius-pill);
-  padding: 0.35rem 0.85rem 0.35rem 0.45rem;
-  font-size: 0.85rem;
+  padding: 0.26rem 0.75rem 0.26rem 0.32rem;
+  font-size: 0.82rem;
   color: var(--nexo-text);
-  font-weight: 500;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(17, 50, 36, 0.04);
+}
+
+.nexo-role-tag {
+  background-color: var(--nexo-sage);
+  color: var(--nexo-forest);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--nexo-radius-pill);
 }
 
 .nexo-user-chip-avatar {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background-color: var(--nexo-sage);
   color: var(--nexo-forest);
   font-weight: 700;
-  font-size: 0.75rem;
+  font-size: 0.76rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -161,16 +184,20 @@ main {
 .btn-nexo-primary {
   background-color: var(--nexo-forest);
   color: #ffffff;
-  border: 1px solid var(--nexo-forest);
-  border-radius: var(--nexo-radius-pill);
-  padding: 0.62rem 1.35rem;
+  border: 1.5px solid var(--nexo-forest);
+  border-radius: var(--nexo-button-radius);
+  padding: 0.6rem 1.35rem;
   font-weight: 600;
-  font-size: 0.92rem;
+  font-size: 0.9rem;
+  line-height: 1.2;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   text-decoration: none;
+  box-shadow: 0 4px 14px rgba(17, 50, 36, 0.14);
   transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .btn-nexo-primary:hover {
@@ -178,58 +205,99 @@ main {
   border-color: var(--nexo-forest-hover);
   color: #ffffff;
   transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(17, 50, 36, 0.2);
 }
 
 .btn-nexo-outline {
-  background-color: transparent;
+  background-color: var(--nexo-surface);
   color: var(--nexo-text);
-  border: 1px solid var(--nexo-border);
-  border-radius: var(--nexo-radius-pill);
-  padding: 0.58rem 1.2rem;
+  border: 1.5px solid var(--nexo-border);
+  border-radius: var(--nexo-button-radius);
+  padding: 0.58rem 1.25rem;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.89rem;
+  line-height: 1.2;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.45rem;
   text-decoration: none;
   transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .btn-nexo-outline:hover {
-  background-color: var(--nexo-surface);
+  background-color: var(--nexo-sage);
   border-color: var(--nexo-forest);
   color: var(--nexo-forest);
+  transform: translateY(-1px);
 }
 
 .btn-nexo-ghost {
-  background: transparent;
-  border: none;
+  background-color: transparent;
+  border: 1.5px solid transparent;
   color: var(--nexo-muted);
-  font-size: 0.88rem;
-  font-weight: 500;
-  padding: 0.4rem 0.7rem;
-  border-radius: var(--nexo-radius-pill);
-  transition: color 0.2s ease, background-color 0.2s ease;
+  font-size: 0.87rem;
+  font-weight: 600;
+  padding: 0.5rem 0.95rem;
+  border-radius: var(--nexo-button-radius);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .btn-nexo-ghost:hover {
   color: var(--nexo-coral);
+  border-color: rgba(239, 91, 66, 0.28);
   background-color: rgba(239, 91, 66, 0.08);
+}
+
+.btn-nexo-danger {
+  background-color: rgba(239, 91, 66, 0.1);
+  border: 1.5px solid rgba(239, 91, 66, 0.35);
+  color: #c93b22;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.58rem 1.25rem;
+  border-radius: var(--nexo-button-radius);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.btn-nexo-danger:hover {
+  background-color: var(--nexo-coral);
+  border-color: var(--nexo-coral);
+  color: #ffffff;
 }
 
 /* Container */
 .nexo-container {
-  max-width: 1240px;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 0 1.75rem;
 }
 
-/* Hero Section (Image 1) */
+/* Hero Section */
 .nexo-hero {
   position: relative;
-  padding: 3.5rem 0 4rem;
+  padding: 3.5rem 2.75rem;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  background-color: var(--nexo-surface);
+  border: 1px solid var(--nexo-border);
+  border-radius: var(--nexo-radius-lg);
+  box-shadow: var(--nexo-shadow);
   display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
+  grid-template-columns: 1.2fr 0.8fr;
   align-items: center;
   gap: 2.5rem;
   overflow: hidden;
@@ -239,49 +307,49 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--nexo-teal);
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
 }
 
 .nexo-eyebrow-dot {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background-color: var(--nexo-lime);
-  box-shadow: 0 0 0 4px rgba(215, 242, 90, 0.35);
+  box-shadow: 0 0 0 4px rgba(215, 242, 90, 0.38);
 }
 
 .nexo-hero-title {
-  font-size: clamp(2.6rem, 5vw, 4.35rem);
+  font-size: clamp(2.4rem, 4.5vw, 3.85rem);
   font-weight: 800;
-  line-height: 1.04;
+  line-height: 1.06;
   letter-spacing: -0.035em;
   color: var(--nexo-text);
-  margin-bottom: 1.35rem;
+  margin-bottom: 1.25rem;
 }
 
 .nexo-hero-subtitle {
-  font-size: 1.12rem;
-  line-height: 1.65;
+  font-size: 1.08rem;
+  line-height: 1.68;
   color: var(--nexo-muted);
-  max-width: 540px;
-  margin-bottom: 2.2rem;
+  max-width: 560px;
+  margin-bottom: 2rem;
 }
 
 .nexo-hero-actions {
   display: flex;
   align-items: center;
-  gap: 1.75rem;
+  gap: 1.35rem;
   flex-wrap: wrap;
 }
 
 .nexo-cta-lg {
-  padding: 0.9rem 1.75rem;
-  font-size: 1rem;
+  padding: 0.85rem 1.75rem;
+  font-size: 0.98rem;
 }
 
 .nexo-link-underline {
@@ -290,9 +358,9 @@ main {
   gap: 0.45rem;
   color: var(--nexo-text);
   font-weight: 600;
-  font-size: 0.98rem;
+  font-size: 0.95rem;
   text-decoration: none;
-  padding-bottom: 0.35rem;
+  padding-bottom: 0.25rem;
   border-bottom: 1.5px solid var(--nexo-border);
   transition: border-color 0.2s ease, color 0.2s ease;
 }
@@ -305,7 +373,7 @@ main {
 /* Hero Abstract Artwork */
 .nexo-hero-art {
   position: relative;
-  height: 360px;
+  height: 310px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -313,31 +381,31 @@ main {
 
 .nexo-shape-pill {
   position: absolute;
-  width: 170px;
-  height: 250px;
+  width: 165px;
+  height: 245px;
   background-color: var(--nexo-violet);
   border-radius: 999px;
   transform: rotate(22deg);
   left: 18%;
-  top: 16%;
+  top: 12%;
   z-index: 2;
   box-shadow: 0 20px 40px rgba(91, 50, 214, 0.22);
 }
 
 .nexo-shape-circle {
   position: absolute;
-  width: 280px;
-  height: 280px;
+  width: 260px;
+  height: 260px;
   background-color: var(--nexo-lime);
   border-radius: 50%;
-  right: -20px;
-  top: 6%;
+  right: 0;
+  top: 8%;
   z-index: 1;
 }
 
 .nexo-star-coral {
   position: absolute;
-  left: 4%;
+  left: 6%;
   top: 8%;
   color: var(--nexo-coral);
   font-size: 1.65rem;
@@ -347,7 +415,7 @@ main {
 
 .nexo-star-violet {
   position: absolute;
-  right: 14%;
+  right: 12%;
   bottom: 4%;
   color: var(--nexo-violet);
   font-size: 1.65rem;
@@ -355,14 +423,14 @@ main {
   z-index: 3;
 }
 
-/* Discovery / Catalog Section (Image 2) */
+/* Discovery / Catalog Section */
 .nexo-section {
-  padding: 2rem 0 4rem;
+  padding: 2.25rem 0 4.5rem;
 }
 
 .nexo-catalog-header {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 1.5rem;
   padding-bottom: 1.5rem;
@@ -371,7 +439,7 @@ main {
 }
 
 .nexo-section-title {
-  font-size: clamp(1.75rem, 3vw, 2.35rem);
+  font-size: clamp(1.75rem, 3vw, 2.3rem);
   font-weight: 800;
   letter-spacing: -0.025em;
   margin: 0;
@@ -380,58 +448,151 @@ main {
 
 .nexo-search-box {
   position: relative;
-  min-width: 280px;
-  flex: 0 1 340px;
+  min-width: 340px;
+  flex: 0 1 380px;
 }
 
 .nexo-search-icon {
   position: absolute;
-  left: 0.2rem;
+  left: 1rem;
   top: 50%;
   transform: translateY(-50%);
   color: var(--nexo-muted);
   pointer-events: none;
+  display: inline-flex;
+  align-items: center;
 }
 
 .nexo-search-input {
   width: 100%;
-  background: transparent;
-  border: none;
-  border-bottom: 1.5px solid #cfcdc2;
-  padding: 0.55rem 0.5rem 0.55rem 1.85rem;
-  font-size: 0.95rem;
+  background-color: var(--nexo-surface);
+  border: 1.5px solid var(--nexo-border);
+  border-radius: var(--nexo-radius-pill);
+  padding: 0.62rem 1rem 0.62rem 2.55rem;
+  font-size: 0.92rem;
   color: var(--nexo-text);
-  transition: border-color 0.2s ease;
+  box-shadow: 0 2px 10px rgba(17, 50, 36, 0.03);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .nexo-search-input:focus {
   outline: none;
-  border-bottom-color: var(--nexo-forest);
+  border-color: var(--nexo-forest);
+  box-shadow: 0 0 0 4px rgba(17, 50, 36, 0.08);
 }
 
 .nexo-filter-bar {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1.25rem;
+  margin: 1.5rem 0 2.25rem;
+}
+
+.nexo-filter-toolbar {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin: 1.6rem 0 2rem;
   flex-wrap: wrap;
 }
 
 .nexo-filter-pills {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.55rem;
   flex-wrap: wrap;
 }
 
-.nexo-pill {
-  background-color: transparent;
-  color: var(--nexo-muted);
+.nexo-catalog-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background-color: var(--nexo-surface);
   border: 1px solid var(--nexo-border);
-  border-radius: var(--nexo-radius-pill);
-  padding: 0.5rem 1.25rem;
+  border-radius: var(--nexo-radius-md);
+  padding: 1.1rem 1.35rem;
+  box-shadow: 0 4px 16px rgba(17, 50, 36, 0.03);
+}
+
+.nexo-catalog-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 170px;
+  flex: 1 1 180px;
+  color: var(--nexo-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.nexo-catalog-filters .nexo-input,
+.nexo-catalog-filters .nexo-select {
+  min-width: 160px;
+  padding: 0.55rem 0.85rem;
   font-size: 0.9rem;
+  border-radius: 10px;
+}
+
+.proposal-delete-form {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+  width: 100%;
+  padding-top: 0.75rem;
+  margin-top: 0.35rem;
+  border-top: 1px dashed var(--nexo-border);
+}
+
+.proposal-delete-form .nexo-input {
+  flex: 1 1 180px;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.86rem;
+  border-radius: 10px;
+}
+
+.nexo-request-section,
+.nexo-notice-section {
+  margin-top: 2.5rem;
+}
+
+.nexo-request-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.nexo-request-card {
+  padding: clamp(1.5rem, 2.5vw, 2.1rem);
+}
+
+.nexo-notice-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.35rem 1.65rem;
+  border: 1px solid var(--nexo-border);
+  border-radius: var(--nexo-radius-md);
+  background-color: var(--nexo-surface);
+  box-shadow: var(--nexo-shadow);
+}
+
+.nexo-notice-card.is-read {
+  opacity: 0.78;
+}
+
+.nexo-pill {
+  background-color: var(--nexo-surface);
+  color: var(--nexo-muted);
+  border: 1.5px solid var(--nexo-border);
+  border-radius: var(--nexo-button-radius);
+  padding: 0.5rem 1.2rem;
+  font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -440,26 +601,31 @@ main {
 
 .nexo-pill:hover {
   border-color: var(--nexo-forest);
-  color: var(--nexo-text);
+  color: var(--nexo-forest);
+  background-color: var(--nexo-sage);
 }
 
 .nexo-pill.active {
   background-color: var(--nexo-forest);
   border-color: var(--nexo-forest);
   color: #ffffff;
+  box-shadow: 0 4px 12px rgba(17, 50, 36, 0.15);
 }
 
 .nexo-count-label {
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   color: var(--nexo-muted);
-  font-weight: 500;
+  font-weight: 600;
+  background-color: var(--nexo-surface-soft);
+  padding: 0.4rem 0.9rem;
+  border-radius: var(--nexo-radius-pill);
 }
 
 /* Cards Grid */
 .nexo-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
-  gap: 1.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 2rem;
 }
 
 .nexo-card {
@@ -470,17 +636,18 @@ main {
   display: flex;
   flex-direction: column;
   box-shadow: var(--nexo-shadow);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .nexo-card:hover {
   transform: translateY(-4px);
   box-shadow: var(--nexo-shadow-hover);
+  border-color: rgba(17, 50, 36, 0.22);
 }
 
 .nexo-card-media {
   position: relative;
-  height: 220px;
+  height: 210px;
   overflow: hidden;
   background-color: var(--nexo-forest);
 }
@@ -500,7 +667,7 @@ main {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(16, 27, 22, 0.08) 0%, rgba(16, 27, 22, 0.55) 100%);
+  background: linear-gradient(180deg, rgba(16, 27, 22, 0.05) 0%, rgba(16, 27, 22, 0.58) 100%);
   pointer-events: none;
 }
 
@@ -509,14 +676,14 @@ main {
   top: 14px;
   left: 14px;
   z-index: 2;
-  background-color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.96);
   color: var(--nexo-text);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0.35rem 0.7rem;
-  border-radius: 4px;
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
   border-left: 4px solid var(--nexo-lime);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
@@ -531,11 +698,11 @@ main {
 
 .nexo-card-index {
   position: absolute;
-  bottom: 10px;
+  bottom: 12px;
   right: 16px;
   z-index: 2;
   color: #ffffff;
-  font-size: 2.15rem;
+  font-size: 2rem;
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.03em;
@@ -543,46 +710,84 @@ main {
 }
 
 .nexo-card-body {
-  padding: 1.5rem;
+  padding: 1.6rem;
   display: flex;
   flex-direction: column;
   flex: 1;
 }
 
+.nexo-proposal-card .nexo-card-body {
+  gap: 0.75rem;
+}
+
+.nexo-proposal-card .nexo-card-desc {
+  flex: 0 0 auto;
+  margin-bottom: 0.45rem;
+}
+
+.nexo-proposal-meta {
+  margin: 0 0 0.75rem;
+  background-color: var(--nexo-bg);
+  border: 1px solid var(--nexo-border);
+  border-radius: 12px;
+  padding: 0.9rem 1.1rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem 1rem;
+}
+
+.nexo-proposal-meta dt {
+  margin: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--nexo-muted);
+}
+
+.nexo-proposal-meta dd {
+  margin: 0.15rem 0 0;
+  font-weight: 600;
+  color: var(--nexo-text);
+}
+
 .nexo-card-category {
-  font-size: 0.74rem;
+  font-size: 0.73rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--nexo-teal);
-  margin-bottom: 0.55rem;
+  margin-bottom: 0.5rem;
 }
 
 .nexo-card-title {
-  font-size: 1.4rem;
+  font-size: 1.32rem;
   font-weight: 750;
-  line-height: 1.22;
+  line-height: 1.26;
   letter-spacing: -0.02em;
   color: var(--nexo-text);
-  margin-bottom: 0.7rem;
+  margin-bottom: 0.65rem;
 }
 
 .nexo-card-desc {
-  font-size: 0.94rem;
-  line-height: 1.58;
+  font-size: 0.93rem;
+  line-height: 1.6;
   color: var(--nexo-muted);
   margin-bottom: 1.25rem;
   flex: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .nexo-card-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.65rem 1.15rem;
-  padding-top: 0.9rem;
+  gap: 0.55rem 0.9rem;
+  padding-top: 1rem;
   border-top: 1px solid var(--nexo-border);
-  margin-bottom: 1.1rem;
-  font-size: 0.83rem;
+  margin-bottom: 1.15rem;
+  font-size: 0.82rem;
   color: var(--nexo-text);
   font-weight: 500;
 }
@@ -590,7 +795,10 @@ main {
 .nexo-meta-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.38rem;
+  background-color: var(--nexo-bg);
+  padding: 0.28rem 0.65rem;
+  border-radius: 8px;
 }
 
 .nexo-meta-item svg {
@@ -602,9 +810,11 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding-top: 0.95rem;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  padding-top: 1rem;
   border-top: 1px solid var(--nexo-border);
+  margin-top: auto;
 }
 
 .nexo-author {
@@ -612,6 +822,7 @@ main {
   align-items: center;
   gap: 0.6rem;
   min-width: 0;
+  flex: 1 1 130px;
 }
 
 .nexo-avatar {
@@ -641,7 +852,7 @@ main {
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  border: 1px solid var(--nexo-border);
+  border: 1.5px solid var(--nexo-border);
   background-color: var(--nexo-surface);
   color: var(--nexo-text);
   display: inline-flex;
@@ -656,41 +867,47 @@ main {
   background-color: var(--nexo-forest);
   border-color: var(--nexo-forest);
   color: #ffffff;
+  transform: translateX(2px);
 }
 
 .btn-nexo-interest {
   background-color: var(--nexo-forest);
   color: #ffffff;
-  border: 1px solid var(--nexo-forest);
-  border-radius: var(--nexo-radius-pill);
-  padding: 0.42rem 0.95rem;
-  font-size: 0.82rem;
+  border: 1.5px solid var(--nexo-forest);
+  border-radius: var(--nexo-button-radius);
+  padding: 0.46rem 1.05rem;
+  font-size: 0.83rem;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
   transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .btn-nexo-interest:hover {
   background-color: var(--nexo-forest-hover);
+  border-color: var(--nexo-forest-hover);
   color: #ffffff;
+  transform: translateY(-1px);
 }
 
 .btn-nexo-heart {
   background-color: var(--nexo-surface);
   color: var(--nexo-muted);
-  border: 1px solid var(--nexo-border);
-  border-radius: var(--nexo-radius-pill);
-  padding: 0.42rem 0.8rem;
-  font-size: 0.82rem;
+  border: 1.5px solid var(--nexo-border);
+  border-radius: var(--nexo-button-radius);
+  padding: 0.44rem 0.85rem;
+  font-size: 0.83rem;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
   text-decoration: none;
-  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+  transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .btn-nexo-heart svg {
@@ -704,8 +921,8 @@ main {
 .btn-nexo-heart:hover,
 .btn-nexo-heart.is-interested {
   color: #bd354b;
-  border-color: rgba(189, 53, 75, 0.35);
-  background-color: rgba(189, 53, 75, 0.07);
+  border-color: rgba(189, 53, 75, 0.38);
+  background-color: rgba(189, 53, 75, 0.08);
 }
 
 .btn-nexo-heart.is-interested svg {
@@ -715,32 +932,33 @@ main {
 .btn-nexo-registered {
   background-color: var(--nexo-sage);
   color: var(--nexo-forest);
-  border: 1px solid rgba(17, 50, 36, 0.15);
-  border-radius: var(--nexo-radius-pill);
-  padding: 0.42rem 0.95rem;
+  border: 1.5px solid rgba(17, 50, 36, 0.16);
+  border-radius: var(--nexo-button-radius);
+  padding: 0.44rem 1rem;
   font-size: 0.82rem;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
 }
 
 /* Forms & Panels */
 .nexo-form-shell {
-  max-width: 780px;
-  margin: 2.5rem auto 4rem;
+  max-width: 800px;
+  margin: 2.5rem auto 4.5rem;
 }
 
 .nexo-auth-shell {
   max-width: 520px;
-  margin: 3rem auto 4rem;
+  margin: 3rem auto 4.5rem;
 }
 
 .nexo-panel {
   background-color: var(--nexo-surface);
   border: 1px solid var(--nexo-border);
   border-radius: var(--nexo-radius-lg);
-  padding: 2.5rem;
+  padding: clamp(1.5rem, 3vw, 2.35rem);
   box-shadow: var(--nexo-shadow);
 }
 
@@ -748,7 +966,7 @@ main {
   font-weight: 600;
   font-size: 0.9rem;
   color: var(--nexo-text);
-  margin-bottom: 0.45rem;
+  margin-bottom: 0.5rem;
   display: block;
 }
 
@@ -759,8 +977,8 @@ main {
   background-color: var(--nexo-bg);
   border: 1.5px solid var(--nexo-border);
   border-radius: 12px;
-  padding: 0.75rem 1rem;
-  font-size: 0.95rem;
+  padding: 0.72rem 1rem;
+  font-size: 0.94rem;
   color: var(--nexo-text);
   transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -779,19 +997,19 @@ main {
   background-color: var(--nexo-forest);
   color: #ffffff;
   border-radius: var(--nexo-radius-pill);
-  padding: 0.8rem 1.4rem;
+  padding: 0.85rem 1.45rem;
   display: inline-flex;
   align-items: center;
   gap: 0.65rem;
   font-size: 0.92rem;
   font-weight: 500;
-  box-shadow: 0 12px 28px rgba(17, 50, 36, 0.22);
-  margin-bottom: 1.5rem;
+  box-shadow: 0 12px 28px rgba(17, 50, 36, 0.18);
+  margin-bottom: 1.75rem;
 }
 
 .nexo-toast-dot {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background-color: #26a669;
   color: #ffffff;
@@ -804,7 +1022,7 @@ main {
 /* Empty State */
 .nexo-empty {
   background-color: var(--nexo-surface);
-  border: 1px dashed var(--nexo-border);
+  border: 1.5px dashed var(--nexo-border);
   border-radius: var(--nexo-radius-lg);
   padding: 3.5rem 2rem;
   text-align: center;
@@ -860,27 +1078,11 @@ main {
 /* Footer */
 .nexo-footer {
   border-top: 1px solid var(--nexo-border);
-  padding: 2rem 0;
-  margin-top: 3rem;
+  padding: 2.25rem 0;
+  margin-top: 3.5rem;
   color: var(--nexo-muted);
   font-size: 0.88rem;
 }
-
-@media (max-width: 991px) {
-  .nexo-hero {
-    grid-template-columns: 1fr;
-    padding: 2.2rem 0 2.5rem;
-  }
-
-  .nexo-hero-art {
-    height: 250px;
-  }
-
-  .nexo-navbar {
-    flex-wrap: wrap;
-  }
-}
-
 
 /* Detail Page & Attendee / Collaborator Directory */
 .nexo-card-link {
@@ -897,10 +1099,10 @@ main {
   border-radius: var(--nexo-radius-lg);
   overflow: hidden;
   background-color: var(--nexo-forest);
-  min-height: 320px;
+  min-height: 330px;
   display: flex;
   align-items: flex-end;
-  margin-bottom: 2rem;
+  margin-bottom: 2.25rem;
   box-shadow: var(--nexo-shadow);
 }
 
@@ -917,30 +1119,47 @@ main {
   position: relative;
   z-index: 2;
   width: 100%;
-  padding: 2.5rem;
-  background: linear-gradient(180deg, rgba(17, 50, 36, 0.05) 0%, rgba(16, 27, 22, 0.88) 100%);
+  padding: clamp(1.75rem, 4vw, 2.75rem);
+  background: linear-gradient(180deg, rgba(17, 50, 36, 0.05) 0%, rgba(16, 27, 22, 0.9) 100%);
   color: #ffffff;
 }
 
 .nexo-detail-title {
-  font-size: clamp(2rem, 4vw, 3.1rem);
+  font-size: clamp(2rem, 4vw, 3rem);
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1.12;
   letter-spacing: -0.03em;
-  margin: 0.75rem 0 0.75rem;
+  margin: 0.85rem 0 1rem;
   color: #ffffff;
 }
 
 .nexo-detail-grid {
   display: grid;
-  grid-template-columns: 1.65fr 1fr;
+  grid-template-columns: 1.6fr 1fr;
   gap: 2rem;
   align-items: start;
 }
 
+.nexo-detail-grid aside.nexo-panel dl > dt {
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--nexo-border);
+  margin-top: 0.85rem !important;
+}
+
+.nexo-detail-grid aside.nexo-panel dl > dt:first-of-type {
+  padding-top: 0;
+  border-top: none;
+  margin-top: 0 !important;
+}
+
+.nexo-detail-grid aside.nexo-panel dl > dd {
+  margin-top: 0.25rem;
+  margin-bottom: 0 !important;
+}
+
 .nexo-prose {
-  font-size: 1.06rem;
-  line-height: 1.75;
+  font-size: 1.04rem;
+  line-height: 1.78;
   color: var(--nexo-text);
   white-space: pre-line;
 }
@@ -948,17 +1167,17 @@ main {
 .nexo-attendee-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 0.9rem;
+  gap: 1rem;
 }
 
 .nexo-attendee-card {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 0.9rem;
   background-color: var(--nexo-bg);
   border: 1px solid var(--nexo-border);
   border-radius: 14px;
-  padding: 0.85rem 1rem;
+  padding: 0.95rem 1.1rem;
   transition: border-color 0.2s ease, transform 0.2s ease;
 }
 
@@ -1006,7 +1225,35 @@ main {
 }
 
 @media (max-width: 991px) {
+  .nexo-hero {
+    grid-template-columns: 1fr;
+    padding: 2.25rem 1.75rem;
+  }
+
+  .nexo-hero-art {
+    height: 240px;
+  }
+
+  .nexo-navbar {
+    flex-wrap: wrap;
+    padding: 0.9rem 1.25rem;
+  }
+
+  .nexo-nav-links,
+  .nexo-nav-actions {
+    flex-wrap: wrap;
+  }
+
+  .nexo-notice-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .nexo-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nexo-proposal-meta {
     grid-template-columns: 1fr;
   }
 }

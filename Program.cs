@@ -10,7 +10,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
 builder.Services.AddMemoryCache();
 builder.Services.AddDbContextPool<GestionEventosDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("GestionEventos")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("GestionEventos"),
+        sqlOptions => sqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
 builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -120,9 +122,9 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
+    app.UseHttpsRedirection();
 }
 
-app.UseHttpsRedirection();
 app.UseStatusCodePagesWithReExecute("/Home/NoEncontrado");
 app.UseRouting();
 app.UseAuthentication();
@@ -132,7 +134,7 @@ app.MapStaticAssets();
 
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Eventos}/{action=Index}/{id?}")
+    pattern: "{controller=Cuenta}/{action=IniciarSesion}/{id?}")
     .WithStaticAssets();
 
 app.Run();

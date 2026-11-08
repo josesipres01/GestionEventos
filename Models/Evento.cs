@@ -53,4 +53,5 @@ public class Evento : IAprobacionPublicacion
 
     public ICollection<Registro> Registros { get; set; } = new List<Registro>();
     public ICollection<InteresEvento> Intereses { get; set; } = new List<InteresEvento>();
+    public ICollection<AsistenciaEvento> Asistencias { get; set; } = new List<AsistenciaEvento>();
 }

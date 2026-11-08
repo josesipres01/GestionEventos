@@ -1,0 +1,165 @@
+@model IEnumerable<Evento>
+@{
+    ViewData["Title"] = "Eventos";
+    var eventos = Model?.ToList() ?? new List<Evento>();
+    var carreras = ViewBag.Carreras as List<Carrera> ?? new List<Carrera>();
+    var registrados = ViewBag.EventosRegistradosIds as HashSet<int> ?? new HashSet<int>();
+    var interesados = ViewBag.EventosInteresadosIds as HashSet<int> ?? new HashSet<int>();
+    var usuarioId = int.TryParse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var id)
+        ? id
+        : 0;
+}
+
+<section class="nexo-section">
+    <header class="mb-4">
+        <div class="nexo-eyebrow">
+            <span class="nexo-eyebrow-dot"></span>
+            <span>EVENTOS UNIVERSITARIOS</span>
+        </div>
+        <div class="nexo-catalog-header">
+            <div>
+                <h1 class="nexo-section-title">Eventos</h1>
+                <p class="text-muted mt-2 mb-0">Encuentra actividades de tu carrera y de toda la comunidad universitaria.</p>
+            </div>
+            <div class="nexo-search-box">
+                <span class="nexo-search-icon" aria-hidden="true">⌕</span>
+                <input type="search"
+                       class="nexo-search-input"
+                       placeholder="Buscar evento, lugar u organizador..."
+                       aria-label="Buscar eventos"
+                       data-nexo-search />
+            </div>
+        </div>
+    </header>
+
+    <div asp-validation-summary="All" class="text-danger small mb-3"></div>
+    @if (TempData["Mensaje"] is string mensaje)
+    {
+        <div class="nexo-toast" role="status">@mensaje</div>
+    }
+
+    <div class="nexo-filter-bar">
+        <form asp-action="Catalogo" method="get" class="nexo-catalog-filters">
+            <label>
+                <span>Carrera</span>
+                <select name="idCarrera" class="nexo-select">
+                    <option value="0" selected="@(ViewBag.IdCarreraSeleccionada is null)">Todas las carreras</option>
+                    @foreach (var carrera in carreras)
+                    {
+                        <option value="@carrera.IdCarrera" selected="@(ViewBag.IdCarreraSeleccionada as int? == carrera.IdCarrera)">
+                            @carrera.Nombre
+                        </option>
+                    }
+                </select>
+            </label>
+            <label>
+                <span>Desde</span>
+                <input type="date" name="fechaDesde" class="nexo-input" value="@ViewBag.FechaDesde" />
+            </label>
+            <label>
+                <span>Hasta</span>
+                <input type="date" name="fechaHasta" class="nexo-input" value="@ViewBag.FechaHasta" />
+            </label>
+            <div class="d-flex align-items-center gap-2">
+                <button type="submit" class="btn-nexo-primary">Aplicar filtros</button>
+                <a asp-action="Catalogo" class="btn-nexo-outline">Limpiar</a>
+            </div>
+        </form>
+        <div class="nexo-filter-toolbar">
+            <span class="text-muted small fw-semibold">Mostrando eventos disponibles</span>
+            <span class="nexo-count-label">@eventos.Count @(eventos.Count == 1 ? "evento" : "eventos")</span>
+        </div>
+    </div>
+
+    @if (eventos.Count == 0)
+    {
+        <div class="nexo-empty">
+            <h2 class="h5 fw-bold mb-2">No hay eventos con estos filtros</h2>
+            <p class="text-muted mb-0">Cambia la carrera o el rango de fechas para ver más actividades.</p>
+        </div>
+    }
+    else
+    {
+        <div class="nexo-grid">
+            @for (var index = 0; index < eventos.Count; index++)
+            {
+                var evento = eventos[index];
+                var nombreOrganizador = evento.Organizador is null
+                    ? "Comunidad universitaria"
+                    : $"{evento.Organizador.Nombres} {evento.Organizador.ApellidoPaterno}".Trim();
+                var estaInscrito = registrados.Contains(evento.IdEvento);
+                var estaInteresado = interesados.Contains(evento.IdEvento);
+                var esResponsable = evento.IdUsuarioOrganizador == usuarioId;
+                var totalInscritos = evento.Registros.Count;
+                var keywords = $"{evento.Nombre} {evento.Descripcion} {evento.Lugar} {nombreOrganizador} evento";
+
+                <article class="nexo-card"
+                         data-nexo-item
+                         data-nexo-type="evento"
+                         data-nexo-keywords="@keywords">
+                    <a asp-action="Detalle" asp-route-id="@evento.IdEvento" class="nexo-card-media d-block text-decoration-none">
+                        <span class="nexo-badge-type">EVENTO</span>
+                        <img src="@(evento.ImagenUrl ?? $"/img/evento-{index % 3 + 1}.svg")" alt="@evento.Nombre" loading="lazy" />
+                    </a>
+                    <div class="nexo-card-body">
+                        <div class="nexo-card-category">@evento.Lugar</div>
+                        <h2 class="nexo-card-title">
+                            <a asp-action="Detalle" asp-route-id="@evento.IdEvento" class="nexo-card-link">@evento.Nombre</a>
+                        </h2>
+                        <p class="nexo-card-desc">@evento.Descripcion</p>
+                        <div class="nexo-card-meta">
+                            <span class="nexo-meta-item">@evento.FechaHora.ToString("dd MMM yyyy · HH:mm")</span>
+                            <span class="nexo-meta-item">@nombreOrganizador</span>
+                            @if (evento.Cupo.HasValue)
+                            {
+                                <span class="nexo-meta-item">Cupo máx: @evento.Cupo</span>
+                            }
+                        </div>
+                        <div class="nexo-card-footer">
+                            @if (User.Identity?.IsAuthenticated == true && !esResponsable)
+                            {
+                                <div class="d-flex flex-wrap gap-2">
+                                    <form asp-action="AlternarInteres" asp-route-id="@evento.IdEvento" method="post">
+                                        <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                                        <button type="submit" class="btn-nexo-outline">
+                                            @(estaInteresado ? "Quitar interés" : "Me interesa")
+                                        </button>
+                                    </form>
+                                    @if (estaInscrito)
+                                    {
+                                        <span class="btn-nexo-registered">Inscrito</span>
+                                    }
+                                    else if (!evento.Cupo.HasValue || totalInscritos < evento.Cupo.Value)
+                                    {
+                                        <form asp-action="RegistrarInteres" asp-route-id="@evento.IdEvento" method="post">
+                                            <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                                            <button type="submit" class="btn-nexo-primary">Inscribirme al evento</button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <span class="btn-nexo-registered">Cupo completo</span>
+                                    }
+                                </div>
+                            }
+                            else if (esResponsable)
+                            {
+                                <span class="btn-nexo-registered">Evento a mi cargo</span>
+                            }
+                            else
+                            {
+                                <a asp-controller="Cuenta"
+                                   asp-action="IniciarSesion"
+                                   asp-route-returnUrl="@Context.Request.Path"
+                                   class="btn-nexo-primary">Inicia sesión para participar</a>
+                            }
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+        <div class="nexo-empty mt-4" data-nexo-empty-filter style="display: none;">
+            <p class="text-muted mb-0">No encontramos eventos para tu búsqueda.</p>
+        </div>
+    }
+</section>

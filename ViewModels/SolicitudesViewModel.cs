@@ -8,6 +8,7 @@ public class SolicitudesViewModel
     public List<SolicitudPublicacionViewModel> MisSolicitudes { get; set; } = new();
     public List<SolicitudPublicacionViewModel> PublicacionesInactivas { get; set; } = new();
     public List<SolicitudPublicacionViewModel> PendientesPorRevisar { get; set; } = new();
+    public List<Notificacion> Notificaciones { get; set; } = new();
 }
 
 public class SolicitudPublicacionViewModel

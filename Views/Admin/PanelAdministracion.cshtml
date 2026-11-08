@@ -15,7 +15,7 @@
     <div class="mb-4">
         <div class="nexo-eyebrow">
             <span class="nexo-eyebrow-dot"></span>
-            <span>ADMINISTRACIÓN GENERAL · UNISON</span>
+            <span>ADMINISTRACIÓN GENERAL</span>
         </div>
 
         <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 pb-3 border-bottom">
@@ -117,18 +117,20 @@
         </div>
 
         <div class="nexo-filter-bar my-3">
-            <div class="nexo-filter-pills" role="tablist">
-                <button type="button" class="nexo-pill active" data-nexo-filter="todo">Todos (@Model.TotalUsuarios)</button>
-                <button type="button" class="nexo-pill" data-nexo-filter="organizador">Organizadores (@Model.TotalOrganizadores)</button>
-                <button type="button" class="nexo-pill" data-nexo-filter="administrador">Administradores (@Model.TotalAdministradores)</button>
-                <button type="button" class="nexo-pill" data-nexo-filter="estudiante">Estudiantes (@Model.TotalEstudiantes)</button>
-            </div>
+            <div class="nexo-filter-toolbar">
+                <div class="nexo-filter-pills" role="tablist">
+                    <button type="button" class="nexo-pill active" data-nexo-filter="todo">Todos (@Model.TotalUsuarios)</button>
+                    <button type="button" class="nexo-pill" data-nexo-filter="organizador">Organizadores (@Model.TotalOrganizadores)</button>
+                    <button type="button" class="nexo-pill" data-nexo-filter="administrador">Administradores (@Model.TotalAdministradores)</button>
+                    <button type="button" class="nexo-pill" data-nexo-filter="estudiante">Estudiantes (@Model.TotalEstudiantes)</button>
+                </div>
 
-            <div class="nexo-count-label"
-                 data-nexo-counter
-                 data-singular="usuario"
-                 data-plural="usuarios">
-                @Model.TotalUsuarios usuarios
+                <div class="nexo-count-label"
+                     data-nexo-counter
+                     data-singular="usuario"
+                     data-plural="usuarios">
+                    @Model.TotalUsuarios usuarios
+                </div>
             </div>
         </div>
 
@@ -220,4 +222,3 @@
         </div>
     </div>
 </section>
-

@@ -22,6 +22,36 @@ namespace GestionEventos.Data.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("GestionEventos.Models.AsistenciaEvento", b =>
+                {
+                    b.Property<int>("IdAsistenciaEvento")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("IdAsistenciaEvento");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdAsistenciaEvento"));
+
+                    b.Property<DateTime>("FechaAsistencia")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("IdEvento")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IdUsuario")
+                        .HasColumnType("int");
+
+                    b.HasKey("IdAsistenciaEvento");
+
+                    b.HasIndex("IdEvento")
+                        .HasDatabaseName("IX_ASISTENCIAS_EVENTOS_IdEvento");
+
+                    b.HasIndex("IdUsuario", "IdEvento")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_ASISTENCIAS_EVENTOS_IdUsuario_IdEvento");
+
+                    b.ToTable("ASISTENCIAS_EVENTOS");
+                });
+
             modelBuilder.Entity("GestionEventos.Models.Carrera", b =>
                 {
                     b.Property<int>("IdCarrera")
@@ -543,6 +573,27 @@ namespace GestionEventos.Data.Migrations
                     b.ToTable("USUARIOS");
                 });
 
+            modelBuilder.Entity("GestionEventos.Models.AsistenciaEvento", b =>
+                {
+                    b.HasOne("GestionEventos.Models.Evento", "Evento")
+                        .WithMany("Asistencias")
+                        .HasForeignKey("IdEvento")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
+                        .HasConstraintName("FK_ASISTENCIAS_EVENTOS_EVENTOS");
+
+                    b.HasOne("GestionEventos.Models.Usuario", "Usuario")
+                        .WithMany("AsistenciasEventos")
+                        .HasForeignKey("IdUsuario")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
+                        .HasConstraintName("FK_ASISTENCIAS_EVENTOS_USUARIOS");
+
+                    b.Navigation("Evento");
+
+                    b.Navigation("Usuario");
+                });
+
             modelBuilder.Entity("GestionEventos.Models.Evento", b =>
                 {
                     b.HasOne("GestionEventos.Models.Usuario", null)
@@ -759,6 +810,8 @@ namespace GestionEventos.Data.Migrations
 
             modelBuilder.Entity("GestionEventos.Models.Evento", b =>
                 {
+                    b.Navigation("Asistencias");
+
                     b.Navigation("Intereses");
 
                     b.Navigation("Registros");
@@ -778,6 +831,8 @@ namespace GestionEventos.Data.Migrations
 
             modelBuilder.Entity("GestionEventos.Models.Usuario", b =>
                 {
+                    b.Navigation("AsistenciasEventos");
+
                     b.Navigation("EventosOrganizados");
 
                     b.Navigation("InteresesEventos");
