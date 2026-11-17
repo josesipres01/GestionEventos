@@ -1,0 +1,59 @@
+#reordenable tr,
+#reordenableEventos tr,
+#reordenableProyectos tr,
+.reordenable-grid .nexo-card {
+    cursor: move;
+}
+
+.reordenable-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.5rem;
+    color: #5b6b63;
+    background-color: rgba(17, 50, 36, 0.06);
+    font-size: 1rem;
+    line-height: 1;
+    user-select: none;
+    cursor: move;
+}
+
+.reordenable-fila-placeholder td {
+    background-color: rgba(215, 242, 90, 0.25) !important;
+    border: 2px dashed #113224 !important;
+    height: 3.5rem;
+}
+
+.reordenable-card-placeholder {
+    border: 2px dashed #113224;
+    border-radius: 1.25rem;
+    background-color: rgba(215, 242, 90, 0.18);
+    min-height: 320px;
+}
+
+.ui-sortable-helper {
+    box-shadow: 0 14px 30px rgba(17, 50, 36, 0.18);
+    opacity: 0.96;
+}
+
+.reordenable-estado {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #113224;
+    background-color: rgba(215, 242, 90, 0.35);
+    border: 1px solid rgba(17, 50, 36, 0.15);
+    border-radius: 999px;
+    padding: 0.3rem 0.85rem;
+    transition: opacity 0.2s ease;
+}
+
+.reordenable-estado.error {
+    color: #842029;
+    background-color: #f8d7da;
+    border-color: #f5c2c7;
+}

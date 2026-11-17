@@ -39,6 +39,8 @@ public class Proyecto : IAprobacionPublicacion
     [StringLength(500)]
     public string? ImagenUrl { get; set; }
 
+    public int Orden { get; set; }
+
     public int IdCarrera { get; set; }
     public DateTime FechaPublicacion { get; set; }
     public DateTime FechaSolicitud { get; set; }

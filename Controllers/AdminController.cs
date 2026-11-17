@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using GestionEventos.Data;
 using GestionEventos.Models;
+using GestionEventos.Servicios;
 using GestionEventos.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -269,7 +270,8 @@ public class AdminController(
             .AsNoTrackingWithIdentityResolution()
             .Include(e => e.Organizador)
             .Include(e => e.Registros)
-            .OrderByDescending(e => e.FechaHora)
+            .OrderBy(e => e.Orden == 0 ? int.MaxValue : e.Orden)
+            .ThenByDescending(e => e.FechaHora)
             .ToListAsync();
 
         var proyectos = await dbContext.Proyectos
@@ -278,11 +280,48 @@ public class AdminController(
             .Include(p => p.Creador)
             .Include(p => p.Organizador)
             .Include(p => p.Registros)
-            .OrderByDescending(p => p.FechaPublicacion)
+            .OrderBy(p => p.Orden == 0 ? int.MaxValue : p.Orden)
+            .ThenByDescending(p => p.FechaPublicacion)
             .ToListAsync();
 
         ViewBag.Proyectos = proyectos;
         return View("SupervisionPublicaciones", eventos);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> OrdenarEventos([FromBody] int[] ids)
+    {
+        if (!await EsAdministradorAsync())
+        {
+            return Forbid();
+        }
+
+        var resultado = await ServicioOrdenPublicaciones.OrdenarEventosGlobalAsync(dbContext, ids);
+        return resultado switch
+        {
+            ResultadoOrdenamiento.Correcto => Ok(),
+            ResultadoOrdenamiento.Prohibido => Forbid(),
+            _ => BadRequest()
+        };
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> OrdenarProyectos([FromBody] int[] ids)
+    {
+        if (!await EsAdministradorAsync())
+        {
+            return Forbid();
+        }
+
+        var resultado = await ServicioOrdenPublicaciones.OrdenarProyectosGlobalAsync(dbContext, ids);
+        return resultado switch
+        {
+            ResultadoOrdenamiento.Correcto => Ok(),
+            ResultadoOrdenamiento.Prohibido => Forbid(),
+            _ => BadRequest()
+        };
     }
 
     [HttpPost]

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Data;
 using GestionEventos.Data;
 using GestionEventos.Models;
+using GestionEventos.Servicios;
 using GestionEventos.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -77,11 +78,13 @@ public class EventosController(
         }
 
         var eventos = await eventosQuery
-            .OrderBy(evento => evento.FechaHora)
+            .OrderBy(evento => evento.Orden == 0 ? int.MaxValue : evento.Orden)
+            .ThenBy(evento => evento.FechaHora)
             .ToListAsync();
 
         var proyectos = await proyectosQuery
-            .OrderByDescending(proyecto => proyecto.FechaPublicacion)
+            .OrderBy(proyecto => proyecto.Orden == 0 ? int.MaxValue : proyecto.Orden)
+            .ThenByDescending(proyecto => proyecto.FechaPublicacion)
             .ToListAsync();
 
         var eventosRegistradosIds = new HashSet<int>();
@@ -191,7 +194,8 @@ public class EventosController(
         }
 
         var eventos = await eventosQuery
-            .OrderBy(evento => evento.FechaHora)
+            .OrderBy(evento => evento.Orden == 0 ? int.MaxValue : evento.Orden)
+            .ThenBy(evento => evento.FechaHora)
             .ToListAsync();
         var eventosRegistradosIds = eventos
             .Where(evento => evento.Registros.Any(registro => registro.IdUsuario == usuarioId))
@@ -474,7 +478,8 @@ public class EventosController(
             .Where(e =>
                 e.IdUsuarioOrganizador == usuarioId ||
                 e.IdUsuarioSolicitante == usuarioId)
-            .OrderByDescending(e => e.FechaHora)
+            .OrderBy(e => e.Orden == 0 ? int.MaxValue : e.Orden)
+            .ThenByDescending(e => e.FechaHora)
             .ToListAsync();
 
         var proyectosResponsable = await dbContext.Proyectos
@@ -486,13 +491,53 @@ public class EventosController(
             .Where(p =>
                 p.IdUsuarioOrganizador == usuarioId ||
                 p.IdUsuarioCreador == usuarioId)
-            .OrderByDescending(p => p.FechaPublicacion)
+            .OrderBy(p => p.Orden == 0 ? int.MaxValue : p.Orden)
+            .ThenByDescending(p => p.FechaPublicacion)
             .ToListAsync();
 
         ViewBag.ProyectosACargo = proyectosResponsable;
         ViewBag.EsAdministrador = esAdmin;
         ViewBag.UsuarioActualId = usuarioId;
         return View("~/Views/Organizador/PanelOrganizador.cshtml", misEventos);
+    }
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Ordenar([FromBody] int[] ids)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
+        {
+            return Challenge();
+        }
+
+        if (!await EsOrganizadorOAdminAsync())
+        {
+            return Forbid();
+        }
+
+        var esAdmin = User.IsInRole("Administrador") ||
+            User.IsInRole("Admin") ||
+            await dbContext.Usuarios
+                .AsNoTracking()
+                .Include(u => u.Rol)
+                .AnyAsync(u =>
+                    u.IdUsuario == usuarioId &&
+                    u.Activo &&
+                    (u.IdRol == 3 || u.Rol.Nombre.Contains("Admin")));
+
+        var resultado = await ServicioOrdenPublicaciones.OrdenarEventosUsuarioAsync(
+            dbContext,
+            usuarioId,
+            esAdmin,
+            ids);
+
+        return resultado switch
+        {
+            ResultadoOrdenamiento.Correcto => Ok(),
+            ResultadoOrdenamiento.Prohibido => Forbid(),
+            _ => BadRequest()
+        };
     }
 
     [Authorize]
@@ -794,6 +839,10 @@ public class EventosController(
         }
 
         var imagenUrl = await GuardarImagenEventoAsync(modelo.ImagenArchivo);
+        var maxOrden = await dbContext.Eventos
+            .AsNoTracking()
+            .Select(e => (int?)e.Orden)
+            .MaxAsync() ?? 0;
 
         var nuevoEvento = new Evento
         {
@@ -804,6 +853,7 @@ public class EventosController(
             Cupo = modelo.Cupo,
             Lugar = modelo.Lugar.Trim(),
             ImagenUrl = imagenUrl,
+            Orden = maxOrden > 0 ? maxOrden + 1 : 0,
             IdUsuarioOrganizador = organizador!.IdUsuario,
             IdUsuarioSolicitante = usuarioId,
             EstadoAprobacion = EstadoAprobacion.Pendiente,

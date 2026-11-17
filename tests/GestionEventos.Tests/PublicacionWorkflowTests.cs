@@ -418,6 +418,156 @@ public class PublicacionWorkflowTests
         FechaRegistro = DateTime.UtcNow
     };
 
+    [Fact]
+    public async Task AdminOrdenarEventosYProyectos_PersisteOrdenYReflejaEnCatalogosPublicos()
+    {
+        await using var connection = await CreateOpenConnectionAsync();
+        await using var db = CreateDbContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await SeedUsersAsync(db);
+        db.Usuarios.Add(CreateUser(6, 3)); // Administrador
+        var career = new Carrera { IdCarrera = 1, Nombre = "Ciencias" };
+        db.Carreras.Add(career);
+        db.Eventos.AddRange(
+            CreateEvent(10, organizerId: 2, creatorId: 1, capacity: 10),
+            CreateEvent(20, organizerId: 2, creatorId: 1, capacity: 10),
+            CreateEvent(30, organizerId: 2, creatorId: 1, capacity: 10));
+        db.Proyectos.AddRange(
+            CreateProject(100, creatorId: 1, organizerId: 2, careerId: 1),
+            CreateProject(200, creatorId: 1, organizerId: 2, careerId: 1),
+            CreateProject(300, creatorId: 1, organizerId: 2, careerId: 1));
+        await db.SaveChangesAsync();
+
+        var admin = CreateAdminController(db, actorId: 6);
+        Assert.IsType<OkResult>(await admin.OrdenarEventos([30, 10, 20]));
+        Assert.IsType<OkResult>(await admin.OrdenarProyectos([300, 100, 200]));
+
+        Assert.Equal(1, (await db.Eventos.SingleAsync(e => e.IdEvento == 30)).Orden);
+        Assert.Equal(2, (await db.Eventos.SingleAsync(e => e.IdEvento == 10)).Orden);
+        Assert.Equal(3, (await db.Eventos.SingleAsync(e => e.IdEvento == 20)).Orden);
+
+        Assert.Equal(1, (await db.Proyectos.SingleAsync(p => p.IdProyecto == 300)).Orden);
+        Assert.Equal(2, (await db.Proyectos.SingleAsync(p => p.IdProyecto == 100)).Orden);
+        Assert.Equal(3, (await db.Proyectos.SingleAsync(p => p.IdProyecto == 200)).Orden);
+
+        var eventosController = CreateEventController(db, actorId: 3);
+        var explorar = Assert.IsType<ViewResult>(await eventosController.Index(null, null, null));
+        var eventosOrdenados = Assert.IsAssignableFrom<IEnumerable<Evento>>(explorar.Model).Select(e => e.IdEvento).ToArray();
+        var proyectosOrdenados = Assert.IsAssignableFrom<IEnumerable<Proyecto>>(explorar.ViewData["Proyectos"]).Select(p => p.IdProyecto).ToArray();
+
+        Assert.Equal([30, 10, 20], eventosOrdenados);
+        Assert.Equal([300, 100, 200], proyectosOrdenados);
+
+        var catalogoEventos = Assert.IsType<ViewResult>(await eventosController.Catalogo(0, null, null));
+        Assert.Equal([30, 10, 20], Assert.IsAssignableFrom<IEnumerable<Evento>>(catalogoEventos.Model).Select(e => e.IdEvento).ToArray());
+
+        var proyectosController = CreateProjectController(db, actorId: 3);
+        var catalogoProyectos = Assert.IsType<ViewResult>(await proyectosController.Index(0, null, null));
+        Assert.Equal([300, 100, 200], Assert.IsAssignableFrom<IEnumerable<Proyecto>>(catalogoProyectos.Model).Select(p => p.IdProyecto).ToArray());
+    }
+
+    [Fact]
+    public async Task OrganizadorOrdenarEventosYProyectos_ReordenaSoloSusPosicionesSinAlterarOtrosOrganizadores()
+    {
+        await using var connection = await CreateOpenConnectionAsync();
+        await using var db = CreateDbContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await SeedUsersAsync(db);
+        db.Usuarios.Add(CreateUser(6, 2)); // Segundo organizador
+        db.Carreras.Add(new Carrera { IdCarrera = 1, Nombre = "Ciencias" });
+
+        var ev1 = CreateEvent(10, organizerId: 2, creatorId: 1, capacity: 10);
+        ev1.Orden = 1;
+        var ev2 = CreateEvent(20, organizerId: 6, creatorId: 3, capacity: 10);
+        ev2.Orden = 2;
+        var ev3 = CreateEvent(30, organizerId: 2, creatorId: 1, capacity: 10);
+        ev3.Orden = 3;
+        var ev4 = CreateEvent(40, organizerId: 6, creatorId: 3, capacity: 10);
+        ev4.Orden = 4;
+        db.Eventos.AddRange(ev1, ev2, ev3, ev4);
+
+        var pr1 = CreateProject(100, creatorId: 1, organizerId: 2, careerId: 1);
+        pr1.Orden = 1;
+        var pr2 = CreateProject(200, creatorId: 3, organizerId: 6, careerId: 1);
+        pr2.Orden = 2;
+        var pr3 = CreateProject(300, creatorId: 1, organizerId: 2, careerId: 1);
+        pr3.Orden = 3;
+        var pr4 = CreateProject(400, creatorId: 3, organizerId: 6, careerId: 1);
+        pr4.Orden = 4;
+        db.Proyectos.AddRange(pr1, pr2, pr3, pr4);
+        await db.SaveChangesAsync();
+
+        var orgEventos = CreateEventController(db, actorId: 2, role: "Organizador");
+        var orgProyectos = CreateProjectController(db, actorId: 2, role: "Organizador");
+
+        Assert.IsType<OkResult>(await orgEventos.Ordenar([30, 10]));
+        Assert.IsType<OkResult>(await orgProyectos.Ordenar([300, 100]));
+
+        Assert.Equal(1, (await db.Eventos.SingleAsync(e => e.IdEvento == 30)).Orden);
+        Assert.Equal(2, (await db.Eventos.SingleAsync(e => e.IdEvento == 20)).Orden);
+        Assert.Equal(3, (await db.Eventos.SingleAsync(e => e.IdEvento == 10)).Orden);
+        Assert.Equal(4, (await db.Eventos.SingleAsync(e => e.IdEvento == 40)).Orden);
+
+        Assert.Equal(1, (await db.Proyectos.SingleAsync(p => p.IdProyecto == 300)).Orden);
+        Assert.Equal(2, (await db.Proyectos.SingleAsync(p => p.IdProyecto == 200)).Orden);
+        Assert.Equal(3, (await db.Proyectos.SingleAsync(p => p.IdProyecto == 100)).Orden);
+        Assert.Equal(4, (await db.Proyectos.SingleAsync(p => p.IdProyecto == 400)).Orden);
+    }
+
+    [Fact]
+    public async Task OrganizadorYEstudiante_NoPuedenOrdenarPublicacionesAjenasOSinPermiso()
+    {
+        await using var connection = await CreateOpenConnectionAsync();
+        await using var db = CreateDbContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await SeedUsersAsync(db);
+        db.Usuarios.Add(CreateUser(6, 2)); // Segundo organizador
+        db.Carreras.Add(new Carrera { IdCarrera = 1, Nombre = "Ciencias" });
+
+        db.Eventos.AddRange(
+            CreateEvent(10, organizerId: 2, creatorId: 1, capacity: 10),
+            CreateEvent(20, organizerId: 6, creatorId: 3, capacity: 10));
+        db.Proyectos.AddRange(
+            CreateProject(100, creatorId: 1, organizerId: 2, careerId: 1),
+            CreateProject(200, creatorId: 3, organizerId: 6, careerId: 1));
+        await db.SaveChangesAsync();
+
+        var studentEvents = CreateEventController(db, actorId: 1, role: "Estudiante");
+        var studentProjects = CreateProjectController(db, actorId: 1, role: "Estudiante");
+        var studentAdmin = CreateAdminController(db, actorId: 1, role: "Estudiante");
+
+        Assert.IsType<ForbidResult>(await studentEvents.Ordenar([10]));
+        Assert.IsType<ForbidResult>(await studentProjects.Ordenar([100]));
+        Assert.IsType<ForbidResult>(await studentAdmin.OrdenarEventos([10, 20]));
+        Assert.IsType<ForbidResult>(await studentAdmin.OrdenarProyectos([100, 200]));
+
+        var orgEvents = CreateEventController(db, actorId: 2, role: "Organizador");
+        var orgProjects = CreateProjectController(db, actorId: 2, role: "Organizador");
+
+        Assert.IsType<ForbidResult>(await orgEvents.Ordenar([20, 10]));
+        Assert.IsType<ForbidResult>(await orgProjects.Ordenar([200, 100]));
+        Assert.All(await db.Eventos.ToListAsync(), e => Assert.Equal(0, e.Orden));
+        Assert.All(await db.Proyectos.ToListAsync(), p => Assert.Equal(0, p.Orden));
+    }
+
+    private static Proyecto CreateProject(int id, int creatorId, int organizerId, int careerId) => new()
+    {
+        IdProyecto = id,
+        IdUsuarioCreador = creatorId,
+        IdUsuarioOrganizador = organizerId,
+        Nombre = $"Proyecto {id}",
+        Descripcion = "Descripción",
+        LugarReunion = "Campus",
+        FechaInicio = DateTime.UtcNow.Date,
+        FechaFin = DateTime.UtcNow.Date.AddDays(2),
+        Cupo = 5,
+        IdCarrera = careerId,
+        FechaPublicacion = DateTime.UtcNow.AddMinutes(-id),
+        FechaSolicitud = DateTime.UtcNow,
+        EstadoAprobacion = EstadoAprobacion.Aprobado,
+        Activo = true
+    };
+
     private static Evento CreateEvent(int id, int organizerId, int creatorId, int? capacity)
     {
         return new Evento
@@ -448,10 +598,23 @@ public class PublicacionWorkflowTests
         return controller;
     }
 
-    private static EventosController CreateEventController(GestionEventosDbContext db, int actorId)
+    private static EventosController CreateEventController(
+        GestionEventosDbContext db,
+        int actorId,
+        string role = "Estudiante")
     {
         var controller = new EventosController(db, null!);
-        ConfigureController(controller, actorId, "Estudiante", configureUrl: true);
+        ConfigureController(controller, actorId, role, configureUrl: true);
+        return controller;
+    }
+
+    private static AdminController CreateAdminController(
+        GestionEventosDbContext db,
+        int actorId,
+        string role = "Administrador")
+    {
+        var controller = new AdminController(db, null!, null!);
+        ConfigureController(controller, actorId, role, configureUrl: true);
         return controller;
     }
 

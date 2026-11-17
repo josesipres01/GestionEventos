@@ -35,7 +35,13 @@
 
     <!-- Tabla de Eventos -->
     <div class="nexo-panel mb-4">
-        <h2 class="h4 fw-bold mb-3">Eventos universitarios (@eventos.Count)</h2>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <div>
+                <h2 class="h4 fw-bold mb-1">Eventos universitarios (@eventos.Count)</h2>
+                <p class="text-muted small mb-0">Arrastra las filas hacia arriba o abajo para actualizar el orden en la base de datos.</p>
+            </div>
+            <span id="estadoOrdenEventos" class="reordenable-estado d-none" role="status" aria-live="polite"></span>
+        </div>
         @if (!eventos.Any())
         {
             <p class="text-muted mb-0">No hay eventos registrados actualmente.</p>
@@ -46,6 +52,7 @@
                 <table class="table align-middle mb-0">
                     <thead>
                         <tr class="text-muted small text-uppercase">
+                            <th style="width: 44px;" class="text-center" aria-label="Ordenar">Orden</th>
                             <th>Evento</th>
                             <th>Fecha y hora</th>
                             <th>Lugar</th>
@@ -54,7 +61,7 @@
                             <th class="text-end">Acciones</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="reordenableEventos">
                         @foreach (var evento in eventos)
                         {
                             var org = evento.Organizador is not null
@@ -63,6 +70,10 @@
                             var totalInscritos = evento.Registros?.Count ?? 0;
 
                             <tr>
+                                <td class="text-center">
+                                    <input type="hidden" value="@evento.IdEvento" class="ids ids-eventos" />
+                                    <span class="reordenable-handle" title="Arrastra para cambiar el orden" aria-hidden="true">⋮⋮</span>
+                                </td>
                                 <td class="fw-bold">
                                     <a asp-controller="Eventos" asp-action="Detalle" asp-route-id="@evento.IdEvento" class="nexo-card-link">
                                         @evento.Nombre
@@ -125,7 +136,13 @@
 
     <!-- Tabla de Proyectos -->
     <div class="nexo-panel">
-        <h2 class="h4 fw-bold mb-3">Proyectos académicos (@proyectos.Count)</h2>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <div>
+                <h2 class="h4 fw-bold mb-1">Proyectos académicos (@proyectos.Count)</h2>
+                <p class="text-muted small mb-0">Arrastra las filas hacia arriba o abajo para actualizar el orden en la base de datos.</p>
+            </div>
+            <span id="estadoOrdenProyectos" class="reordenable-estado d-none" role="status" aria-live="polite"></span>
+        </div>
         @if (!proyectos.Any())
         {
             <p class="text-muted mb-0">No hay proyectos registrados actualmente.</p>
@@ -136,6 +153,7 @@
                 <table class="table align-middle mb-0">
                     <thead>
                         <tr class="text-muted small text-uppercase">
+                            <th style="width: 44px;" class="text-center" aria-label="Ordenar">Orden</th>
                             <th>Proyecto</th>
                             <th>Carrera</th>
                             <th>Responsable (Org/Admin)</th>
@@ -144,7 +162,7 @@
                             <th class="text-end">Acciones</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="reordenableProyectos">
                         @foreach (var proyecto in proyectos)
                         {
                             var autor = proyecto.Creador is not null
@@ -156,6 +174,10 @@
                                 : "Organizador pendiente";
 
                             <tr>
+                                <td class="text-center">
+                                    <input type="hidden" value="@proyecto.IdProyecto" class="ids ids-proyectos" />
+                                    <span class="reordenable-handle" title="Arrastra para cambiar el orden" aria-hidden="true">⋮⋮</span>
+                                </td>
                                 <td class="fw-bold">
                                     <a asp-controller="Proyectos" asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="nexo-card-link">
                                         @proyecto.Nombre
@@ -264,6 +286,78 @@
             texto.textContent = `¿Confirmas que deseas eliminar el ${tipo} «${nombre}»? Esta acción lo ocultará de la plataforma y conservará sus registros.`;
             motivo.value = "";
             motivo.focus();
+        });
+
+        const urlOrdenarEventos = '@Url.Action("OrdenarEventos", "Admin")';
+        const urlOrdenarProyectos = '@Url.Action("OrdenarProyectos", "Admin")';
+
+        $(function () {
+            const token = document.querySelector('#formEliminarPublicacion input[name="__RequestVerificationToken"]')?.value ?? '';
+
+            function ajustarAnchoCeldas(e, ui) {
+                ui.children().each(function () {
+                    $(this).width($(this).width());
+                });
+                return ui;
+            }
+
+            function mostrarEstado(selectorEstado, mensaje, esError) {
+                const $estado = $(selectorEstado);
+                $estado.text(mensaje);
+                $estado.toggleClass("error", Boolean(esError));
+                $estado.removeClass("d-none");
+                clearTimeout($estado.data("timer"));
+                $estado.data("timer", setTimeout(() => $estado.addClass("d-none"), 2800));
+            }
+
+            function obtenerIdsDeElementos(selectorContenedor, selectorIds) {
+                return $(`${selectorContenedor} ${selectorIds}`).map(function () {
+                    return Number($(this).val());
+                }).get();
+            }
+
+            async function enviarIdsAlBackend(url, ids, selectorEstado) {
+                const data = JSON.stringify(ids);
+                try {
+                    const respuesta = await fetch(url, {
+                        method: 'POST',
+                        body: data,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'RequestVerificationToken': token
+                        }
+                    });
+
+                    if (respuesta.ok) {
+                        mostrarEstado(selectorEstado, '✓ Orden guardado', false);
+                    } else {
+                        mostrarEstado(selectorEstado, 'No se pudo guardar el orden', true);
+                    }
+                } catch {
+                    mostrarEstado(selectorEstado, 'Error de conexión al guardar el orden', true);
+                }
+            }
+
+            function inicializarTablaOrdenable(selectorTbody, selectorIds, url, selectorEstado) {
+                const $tbody = $(selectorTbody);
+                if (!$tbody.length) {
+                    return;
+                }
+
+                $tbody.sortable({
+                    axis: 'y',
+                    helper: ajustarAnchoCeldas,
+                    placeholder: 'reordenable-fila-placeholder',
+                    cancel: 'a, button, input, textarea, select, form',
+                    stop: async function () {
+                        const ids = obtenerIdsDeElementos(selectorTbody, selectorIds);
+                        await enviarIdsAlBackend(url, ids, selectorEstado);
+                    }
+                });
+            }
+
+            inicializarTablaOrdenable('#reordenableEventos', '.ids-eventos', urlOrdenarEventos, '#estadoOrdenEventos');
+            inicializarTablaOrdenable('#reordenableProyectos', '.ids-proyectos', urlOrdenarProyectos, '#estadoOrdenProyectos');
         });
     </script>
 }

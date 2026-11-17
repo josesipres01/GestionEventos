@@ -154,6 +154,9 @@ namespace GestionEventos.Data.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
 
+                    b.Property<int>("Orden")
+                        .HasColumnType("int");
+
                     b.Property<bool>("ReactivacionSolicitada")
                         .HasColumnType("bit");
 
@@ -375,6 +378,9 @@ namespace GestionEventos.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("int");
 
                     b.Property<bool>("ReactivacionSolicitada")
                         .HasColumnType("bit");

@@ -29,6 +29,8 @@ public class Evento : IAprobacionPublicacion
     [StringLength(500)]
     public string? ImagenUrl { get; set; }
 
+    public int Orden { get; set; }
+
     public int IdUsuarioOrganizador { get; set; }
     public int IdUsuarioSolicitante { get; set; }
     public bool Activo { get; set; } = true;

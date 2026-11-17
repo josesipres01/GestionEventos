@@ -194,8 +194,15 @@
 
     <!-- Sección 1: Mis Eventos Organizados -->
     <div class="mb-5">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2 class="h4 fw-bold mb-0">Eventos que organizo (@misEventos.Count)</h2>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <div>
+                <h2 class="h4 fw-bold mb-1">Eventos que organizo (@misEventos.Count)</h2>
+                @if (misEventos.Count > 1)
+                {
+                    <p class="text-muted small mb-0">Arrastra las tarjetas para cambiar el orden en que aparecen tus eventos.</p>
+                }
+            </div>
+            <span id="estadoOrdenEventos" class="reordenable-estado d-none" role="status" aria-live="polite"></span>
         </div>
 
         @if (!misEventos.Any())
@@ -209,7 +216,7 @@
         else
         {
             var idx = 1;
-            <div class="nexo-grid">
+            <div id="reordenableEventos" class="nexo-grid reordenable-grid">
                 @foreach (var evento in misEventos)
                 {
                     var numeroTexto = idx.ToString("D2");
@@ -230,6 +237,7 @@
                              data-nexo-item
                              data-nexo-type="@estadoFiltroEvento"
                              data-nexo-keywords="@palabrasEvento">
+                        <input type="hidden" value="@evento.IdEvento" class="ids ids-eventos" />
                         @if (evento.Activo)
                         {
                             <a asp-action="Detalle" asp-route-id="@evento.IdEvento" class="nexo-card-media d-block text-decoration-none">
@@ -331,8 +339,15 @@
 
     <!-- Sección 2: Proyectos Académicos donde el Organizador es Responsable -->
     <div>
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2 class="h4 fw-bold mb-0">Proyectos académicos bajo mi responsabilidad (@proyectosACargo.Count)</h2>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <div>
+                <h2 class="h4 fw-bold mb-1">Proyectos académicos bajo mi responsabilidad (@proyectosACargo.Count)</h2>
+                @if (proyectosACargo.Count > 1)
+                {
+                    <p class="text-muted small mb-0">Arrastra las tarjetas para cambiar el orden en que aparecen tus proyectos.</p>
+                }
+            </div>
+            <span id="estadoOrdenProyectos" class="reordenable-estado d-none" role="status" aria-live="polite"></span>
         </div>
 
         @if (!proyectosACargo.Any())
@@ -345,7 +360,7 @@
         else
         {
             var idxP = 1;
-            <div class="nexo-grid">
+            <div id="reordenableProyectos" class="nexo-grid reordenable-grid">
                 @foreach (var proyecto in proyectosACargo)
                 {
                     var numeroTexto = idxP.ToString("D2");
@@ -366,6 +381,7 @@
                              data-nexo-item
                              data-nexo-type="@estadoFiltroProyecto"
                              data-nexo-keywords="@palabrasProyecto">
+                        <input type="hidden" value="@proyecto.IdProyecto" class="ids ids-proyectos" />
                         @if (proyecto.Activo)
                         {
                             <a asp-controller="Proyectos" asp-action="Detalle" asp-route-id="@proyecto.IdProyecto" class="nexo-card-media d-block text-decoration-none">
@@ -525,4 +541,84 @@
         <h3 class="h5 fw-bold mb-1">No se encontraron elementos con ese filtro</h3>
         <p class="text-muted mb-0">Prueba seleccionando otro estado o cambiando el término de búsqueda.</p>
     </div>
+
+    <form id="formTokenOrdenOrganizador" class="d-none">
+        @Html.AntiForgeryToken()
+    </form>
 </section>
+
+@section Scripts {
+    <script>
+        const urlOrdenarEventos = '@Url.Action("Ordenar", "Eventos")';
+        const urlOrdenarProyectos = '@Url.Action("Ordenar", "Proyectos")';
+
+        $(function () {
+            const token = document.querySelector('#formTokenOrdenOrganizador input[name="__RequestVerificationToken"]')?.value ?? '';
+
+            function mostrarEstado(selectorEstado, mensaje, esError) {
+                const $estado = $(selectorEstado);
+                $estado.text(mensaje);
+                $estado.toggleClass("error", Boolean(esError));
+                $estado.removeClass("d-none");
+                clearTimeout($estado.data("timer"));
+                $estado.data("timer", setTimeout(() => $estado.addClass("d-none"), 2800));
+            }
+
+            function actualizarNumeracion(selectorContenedor) {
+                $(`${selectorContenedor} > article`).each(function (indice) {
+                    $(this).find('.nexo-card-index').text(String(indice + 1).padStart(2, '0'));
+                });
+            }
+
+            function obtenerIdsDeElementos(selectorContenedor, selectorIds) {
+                return $(`${selectorContenedor} ${selectorIds}`).map(function () {
+                    return Number($(this).val());
+                }).get();
+            }
+
+            async function enviarIdsAlBackend(url, ids, selectorEstado) {
+                const data = JSON.stringify(ids);
+                try {
+                    const respuesta = await fetch(url, {
+                        method: 'POST',
+                        body: data,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'RequestVerificationToken': token
+                        }
+                    });
+
+                    if (respuesta.ok) {
+                        mostrarEstado(selectorEstado, '✓ Orden guardado', false);
+                    } else {
+                        mostrarEstado(selectorEstado, 'No se pudo guardar el orden', true);
+                    }
+                } catch {
+                    mostrarEstado(selectorEstado, 'Error de conexión al guardar el orden', true);
+                }
+            }
+
+            function inicializarGridOrdenable(selectorGrid, selectorIds, url, selectorEstado) {
+                const $grid = $(selectorGrid);
+                if (!$grid.length) {
+                    return;
+                }
+
+                $grid.sortable({
+                    items: '> article',
+                    tolerance: 'pointer',
+                    placeholder: 'reordenable-card-placeholder',
+                    cancel: 'a, button, input, textarea, select, form',
+                    stop: async function () {
+                        actualizarNumeracion(selectorGrid);
+                        const ids = obtenerIdsDeElementos(selectorGrid, selectorIds);
+                        await enviarIdsAlBackend(url, ids, selectorEstado);
+                    }
+                });
+            }
+
+            inicializarGridOrdenable('#reordenableEventos', '.ids-eventos', urlOrdenarEventos, '#estadoOrdenEventos');
+            inicializarGridOrdenable('#reordenableProyectos', '.ids-proyectos', urlOrdenarProyectos, '#estadoOrdenProyectos');
+        });
+    </script>
+}

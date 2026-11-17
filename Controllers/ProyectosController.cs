@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Data;
 using GestionEventos.Data;
 using GestionEventos.Models;
+using GestionEventos.Servicios;
 using GestionEventos.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -73,7 +74,8 @@ public class ProyectosController(
         }
 
         var proyectos = await proyectosQuery
-            .OrderByDescending(proyecto => proyecto.FechaPublicacion)
+            .OrderBy(proyecto => proyecto.Orden == 0 ? int.MaxValue : proyecto.Orden)
+            .ThenByDescending(proyecto => proyecto.FechaPublicacion)
             .ToListAsync();
 
         var registradosIds = new HashSet<int>();
@@ -287,6 +289,10 @@ public class ProyectosController(
         }
 
         var imagenUrl = await GuardarImagenProyectoAsync(modelo.ImagenArchivo);
+        var maxOrden = await dbContext.Proyectos
+            .AsNoTracking()
+            .Select(p => (int?)p.Orden)
+            .MaxAsync() ?? 0;
 
         var nuevoProyecto = new Proyecto
         {
@@ -299,6 +305,7 @@ public class ProyectosController(
             FechaFin = modelo.FechaFin.Date,
             Cupo = modelo.Cupo,
             ImagenUrl = imagenUrl,
+            Orden = maxOrden > 0 ? maxOrden + 1 : 0,
             IdCarrera = modelo.IdCarrera,
             FechaPublicacion = DateTime.UtcNow,
             FechaSolicitud = DateTime.UtcNow,
@@ -1052,6 +1059,51 @@ public class ProyectosController(
         await dbContext.SaveChangesAsync();
         TempData["Mensaje"] = $"Se agregó y acreditó la participación de {usuario.Nombres} {usuario.ApellidoPaterno}.";
         return RedirectToAction(nameof(Participacion), new { id });
+    }
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Ordenar([FromBody] int[] ids)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
+        {
+            return Challenge();
+        }
+
+        var usuario = await dbContext.Usuarios
+            .AsNoTracking()
+            .Include(u => u.Rol)
+            .FirstOrDefaultAsync(u => u.IdUsuario == usuarioId && u.Activo);
+
+        var esAdmin = User.IsInRole("Administrador") ||
+            User.IsInRole("Admin") ||
+            (usuario is not null &&
+             (usuario.IdRol == 3 || usuario.Rol.Nombre.Contains("Admin", StringComparison.OrdinalIgnoreCase)));
+
+        var esOrganizador = esAdmin ||
+            User.IsInRole("Organizador/Docente") ||
+            User.IsInRole("Organizador") ||
+            (usuario is not null &&
+             (usuario.IdRol == 2 || usuario.Rol.Nombre.Contains("Organizador", StringComparison.OrdinalIgnoreCase)));
+
+        if (!esOrganizador)
+        {
+            return Forbid();
+        }
+
+        var resultado = await ServicioOrdenPublicaciones.OrdenarProyectosUsuarioAsync(
+            dbContext,
+            usuarioId,
+            esAdmin,
+            ids);
+
+        return resultado switch
+        {
+            ResultadoOrdenamiento.Correcto => Ok(),
+            ResultadoOrdenamiento.Prohibido => Forbid(),
+            _ => BadRequest()
+        };
     }
 
     private async Task<bool> PuedeEditarProyectoAsync(Proyecto proyecto, int usuarioId)
