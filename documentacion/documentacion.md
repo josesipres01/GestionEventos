@@ -26,8 +26,8 @@ El esquema se define exclusivamente en las migraciones de EF Core. El archivo [`
 | `ROLES` | Roles de estudiante, organizador/docente y administrador. |
 | `CARRERAS` | Carreras asociadas a usuarios y proyectos. |
 | `USUARIOS` | Perfil, correo único, rol, estado y hash de contraseña. |
-| `EVENTOS` | Publicaciones con organizador, solicitante, revisor, eliminador, fecha de fin, cupo y estado de aprobación controlado. El cupo sigue siendo nullable para publicaciones anteriores. |
-| `PROYECTOS` | Publicaciones con creador, organizador responsable, revisor, eliminador, carrera, cupo máximo y estado de aprobación controlado. |
+| `EVENTOS` | Publicaciones con organizador, solicitante, revisor, eliminador, fecha de fin, cupo, `Orden` y estado de aprobación controlado. El cupo sigue siendo nullable para publicaciones anteriores. |
+| `PROYECTOS` | Publicaciones con creador, organizador responsable, revisor, eliminador, carrera, cupo máximo, `Orden` y estado de aprobación controlado. |
 | `REGISTROS` | Inscripciones de usuarios a eventos, con fecha; único por usuario y evento. |
 | `ASISTENCIAS_EVENTOS` | Acreditación de participación de usuarios en eventos, con fecha; único por usuario y evento. |
 | `REGISTROS_PROYECTOS` | Inscripciones directas de colaboradores con estado, fecha de registro y acreditación de participación (`FechaRevision` e `IdUsuarioRevisor`); único por usuario y proyecto. |
