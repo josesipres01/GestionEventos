@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace GestionEventos.ViewModels;
 
@@ -42,5 +43,9 @@ public class RegistrarOrganizadorViewModel
     [Compare(nameof(Contrasena), ErrorMessage = "Las contraseñas no coinciden.")]
     [Display(Name = "Confirmar contraseña")]
     public string ConfirmarContrasena { get; set; } = string.Empty;
+
+    public IEnumerable<SelectListItem> Roles { get; set; } = Enumerable.Empty<SelectListItem>();
+
+    public IEnumerable<SelectListItem> Carreras { get; set; } = Enumerable.Empty<SelectListItem>();
 }
 

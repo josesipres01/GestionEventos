@@ -40,7 +40,8 @@ public class AdminController(
 
         var carreras = await dbContext.Carreras
             .AsNoTracking()
-            .OrderBy(c => c.Nombre)
+            .OrderBy(c => c.Orden == 0 ? int.MaxValue : c.Orden)
+            .ThenBy(c => c.Nombre)
             .ToListAsync();
 
         var totalEventos = await dbContext.Eventos.AsNoTracking().CountAsync(evento => evento.Activo);
@@ -73,8 +74,9 @@ public class AdminController(
             return RedirectToAction("AccesoDenegado", "Cuenta");
         }
 
-        await CargarCatalogosAsync();
-        return View("RegistrarUsuarioRol", new RegistrarOrganizadorViewModel { IdRol = 2 });
+        var modelo = new RegistrarOrganizadorViewModel { IdRol = 2 };
+        await CargarCatalogosAsync(modelo);
+        return View("RegistrarUsuarioRol", modelo);
     }
 
     [HttpPost]
@@ -107,7 +109,7 @@ public class AdminController(
 
         if (!ModelState.IsValid)
         {
-            await CargarCatalogosAsync();
+            await CargarCatalogosAsync(modelo);
             return View("RegistrarUsuarioRol", modelo);
         }
 
@@ -197,10 +199,34 @@ public class AdminController(
             .AsSplitQuery()
             .Include(c => c.Usuarios)
             .Include(c => c.Proyectos)
-            .OrderBy(c => c.Nombre)
+            .OrderBy(c => c.Orden == 0 ? int.MaxValue : c.Orden)
+            .ThenBy(c => c.Nombre)
             .ToListAsync();
 
         return View("GestionCarreras", carreras);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> OrdenarCarreras([FromBody] int[] ids)
+    {
+        if (!await EsAdministradorAsync())
+        {
+            return Forbid();
+        }
+
+        var resultado = await ServicioOrdenPublicaciones.OrdenarCarrerasGlobalAsync(dbContext, ids);
+        if (resultado == ResultadoOrdenamiento.Correcto)
+        {
+            memoryCache.Remove("Catalogo_Carreras");
+        }
+
+        return resultado switch
+        {
+            ResultadoOrdenamiento.Correcto => Ok(),
+            ResultadoOrdenamiento.Prohibido => Forbid(),
+            _ => BadRequest()
+        };
     }
 
     [HttpPost]
@@ -225,8 +251,7 @@ public class AdminController(
             return RedirectToAction(nameof(Carreras));
         }
 
-        dbContext.Carreras.Add(new Carrera { Nombre = nombreLimpio });
-        await dbContext.SaveChangesAsync();
+        await ServicioOrdenPublicaciones.CrearCarreraAsync(dbContext, new Carrera { Nombre = nombreLimpio });
         memoryCache.Remove("Catalogo_Carreras");
 
         TempData["Mensaje"] = $"Se agregó la carrera «{nombreLimpio}» al catálogo.";
@@ -550,7 +575,7 @@ public class AdminController(
         return RedirectToAction(nameof(Publicaciones));
     }
 
-    private async Task CargarCatalogosAsync()
+    private async Task CargarCatalogosAsync(RegistrarOrganizadorViewModel? modelo = null)
     {
         var roles = await dbContext.Roles
             .AsNoTracking()
@@ -559,11 +584,21 @@ public class AdminController(
 
         var carreras = await dbContext.Carreras
             .AsNoTracking()
-            .OrderBy(c => c.Nombre)
+            .OrderBy(c => c.Orden == 0 ? int.MaxValue : c.Orden)
+            .ThenBy(c => c.Nombre)
             .ToListAsync();
 
-        ViewBag.Roles = new SelectList(roles, nameof(Rol.IdRol), nameof(Rol.Nombre));
-        ViewBag.Carreras = new SelectList(carreras, nameof(Carrera.IdCarrera), nameof(Carrera.Nombre));
+        var selectRoles = new SelectList(roles, nameof(Rol.IdRol), nameof(Rol.Nombre), modelo?.IdRol);
+        var selectCarreras = new SelectList(carreras, nameof(Carrera.IdCarrera), nameof(Carrera.Nombre), modelo?.IdCarrera);
+
+        ViewBag.Roles = selectRoles;
+        ViewBag.Carreras = selectCarreras;
+
+        if (modelo is not null)
+        {
+            modelo.Roles = selectRoles;
+            modelo.Carreras = selectCarreras;
+        }
     }
 
     private async Task<bool> EsAdministradorAsync()

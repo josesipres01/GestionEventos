@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace GestionEventos.ViewModels;
 
@@ -32,9 +33,10 @@ public class CrearEventoViewModel
     [Display(Name = "Lugar donde se realizará")]
     public string Lugar { get; set; } = string.Empty;
 
-    [Range(1, int.MaxValue, ErrorMessage = "Selecciona un organizador responsable.")]
-    [Display(Name = "Organizador que aprobará la solicitud")]
+    [Display(Name = "Organizador responsable")]
     public int IdUsuarioOrganizador { get; set; }
+
+    public IEnumerable<SelectListItem> Organizadores { get; set; } = Enumerable.Empty<SelectListItem>();
 
     [Display(Name = "Imagen de miniatura (opcional)")]
     public IFormFile? ImagenArchivo { get; set; }

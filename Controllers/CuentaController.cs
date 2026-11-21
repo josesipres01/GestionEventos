@@ -20,8 +20,9 @@ public class CuentaController(
     [HttpGet]
     public async Task<IActionResult> Registrar()
     {
-        await CargarCarrerasAsync();
-        return View();
+        var modelo = new RegistroUsuarioViewModel();
+        await CargarCarrerasAsync(modelo);
+        return View(modelo);
     }
 
     [HttpPost]
@@ -44,7 +45,7 @@ public class CuentaController(
 
         if (!ModelState.IsValid)
         {
-            await CargarCarrerasAsync();
+            await CargarCarrerasAsync(modelo);
             return View(modelo);
         }
 
@@ -144,17 +145,25 @@ public class CuentaController(
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
             return await dbContext.Carreras
                 .AsNoTracking()
-                .OrderBy(carrera => carrera.Nombre)
+                .OrderBy(carrera => carrera.Orden == 0 ? int.MaxValue : carrera.Orden)
+                .ThenBy(carrera => carrera.Nombre)
                 .ToListAsync();
         }) ?? new List<Carrera>();
     }
 
-    private async Task CargarCarrerasAsync()
+    private async Task CargarCarrerasAsync(RegistroUsuarioViewModel? modelo = null)
     {
-        ViewBag.Carreras = new SelectList(
+        var selectCarreras = new SelectList(
             await ObtenerCarrerasCacheAsync(),
             nameof(Carrera.IdCarrera),
-            nameof(Carrera.Nombre));
+            nameof(Carrera.Nombre),
+            modelo?.IdCarrera);
+
+        ViewBag.Carreras = selectCarreras;
+        if (modelo is not null)
+        {
+            modelo.Carreras = selectCarreras;
+        }
     }
 
     private async Task IniciarSesionAsync(Usuario usuario)

@@ -48,7 +48,7 @@
 
                 <div class="col-md-6">
                     <label asp-for="IdRol" class="nexo-label"></label>
-                    <select asp-for="IdRol" asp-items="ViewBag.Roles" class="nexo-select"></select>
+                    <select asp-for="IdRol" asp-items="Model.Roles" class="nexo-select"></select>
                     <span asp-validation-for="IdRol" class="text-danger small"></span>
                     <div class="form-text text-muted small mt-1">
                         El rol <strong>Organizador/Docente</strong> permite crear eventos y ser seleccionado como responsable de proyectos.
@@ -58,7 +58,7 @@
 
             <div class="mb-3">
                 <label asp-for="IdCarrera" class="nexo-label"></label>
-                <select asp-for="IdCarrera" asp-items="ViewBag.Carreras" class="nexo-select">
+                <select asp-for="IdCarrera" asp-items="Model.Carreras" class="nexo-select">
                     <option value="">Selecciona una carrera o departamento (opcional)</option>
                 </select>
                 <span asp-validation-for="IdCarrera" class="text-danger small"></span>

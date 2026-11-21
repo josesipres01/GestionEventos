@@ -550,6 +550,103 @@ public class PublicacionWorkflowTests
         Assert.All(await db.Proyectos.ToListAsync(), p => Assert.Equal(0, p.Orden));
     }
 
+    [Fact]
+    public async Task CrearEventoYProyecto_CalculaOrdenSiguienteConCoalesceMaxYRecuperaId()
+    {
+        await using var connection = await CreateOpenConnectionAsync();
+        await using var db = CreateDbContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await SeedUsersAsync(db);
+        db.Carreras.Add(new Carrera { IdCarrera = 1, Nombre = "Ciencias" });
+        await db.SaveChangesAsync();
+
+        var eventosController = CreateEventController(db, actorId: 1);
+        Assert.IsType<RedirectToActionResult>(await eventosController.Crear(new CrearEventoViewModel
+        {
+            Nombre = "Primer Evento",
+            Descripcion = "Desc 1",
+            FechaHora = DateTime.UtcNow.AddDays(1),
+            FechaFin = DateTime.UtcNow.AddDays(1).AddHours(2),
+            Cupo = 20,
+            Lugar = "Auditorio",
+            IdUsuarioOrganizador = 2
+        }));
+        Assert.IsType<RedirectToActionResult>(await eventosController.Crear(new CrearEventoViewModel
+        {
+            Nombre = "Segundo Evento",
+            Descripcion = "Desc 2",
+            FechaHora = DateTime.UtcNow.AddDays(2),
+            FechaFin = DateTime.UtcNow.AddDays(2).AddHours(2),
+            Cupo = 30,
+            Lugar = "Sala B",
+            IdUsuarioOrganizador = 2
+        }));
+
+        var eventosCreados = await db.Eventos.OrderBy(e => e.IdEvento).ToListAsync();
+        Assert.Equal(2, eventosCreados.Count);
+        Assert.Equal(1, eventosCreados[0].Orden);
+        Assert.Equal(2, eventosCreados[1].Orden);
+        Assert.All(eventosCreados, e => Assert.True(e.IdEvento > 0));
+        Assert.Equal(2, await db.Notificaciones.CountAsync(n => n.IdEvento != null));
+    }
+
+    [Fact]
+    public async Task OrganizadorOAdmin_PuedeCrearEventoYProyectoPorDefectoOSeleccionandoSuNombre()
+    {
+        await using var connection = await CreateOpenConnectionAsync();
+        await using var db = CreateDbContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await SeedUsersAsync(db);
+        db.Usuarios.Add(CreateUser(6, 3)); // Administrador
+        db.Carreras.Add(new Carrera { IdCarrera = 1, Nombre = "Ciencias" });
+        await db.SaveChangesAsync();
+
+        var orgEventos = CreateEventController(db, actorId: 2, role: "Organizador");
+        // 1) Sin seleccionar organizador (0 -> se asigna por defecto a sí mismo)
+        Assert.IsType<RedirectToActionResult>(await orgEventos.Crear(new CrearEventoViewModel
+        {
+            Nombre = "Evento por defecto Organizador",
+            Descripcion = "Descripción",
+            FechaHora = DateTime.UtcNow.AddDays(1),
+            FechaFin = DateTime.UtcNow.AddDays(1).AddHours(2),
+            Cupo = 25,
+            Lugar = "Auditorio",
+            IdUsuarioOrganizador = 0
+        }));
+
+        // 2) Seleccionando su propio nombre explícitamente
+        Assert.IsType<RedirectToActionResult>(await orgEventos.Crear(new CrearEventoViewModel
+        {
+            Nombre = "Evento propio Organizador",
+            Descripcion = "Descripción",
+            FechaHora = DateTime.UtcNow.AddDays(2),
+            FechaFin = DateTime.UtcNow.AddDays(2).AddHours(2),
+            Cupo = 25,
+            Lugar = "Auditorio",
+            IdUsuarioOrganizador = 2
+        }));
+
+        // 3) Admin creando evento sin seleccionar organizador (0 -> por defecto Admin)
+        var adminEventos = CreateEventController(db, actorId: 6, role: "Administrador");
+        Assert.IsType<RedirectToActionResult>(await adminEventos.Crear(new CrearEventoViewModel
+        {
+            Nombre = "Evento por defecto Admin",
+            Descripcion = "Descripción",
+            FechaHora = DateTime.UtcNow.AddDays(3),
+            FechaFin = DateTime.UtcNow.AddDays(3).AddHours(2),
+            Cupo = 40,
+            Lugar = "Sala Magna",
+            IdUsuarioOrganizador = 0
+        }));
+
+        var eventos = await db.Eventos.OrderBy(e => e.Orden).ToListAsync();
+        Assert.Equal(3, eventos.Count);
+        Assert.Equal(2, eventos[0].IdUsuarioOrganizador);
+        Assert.Equal(2, eventos[1].IdUsuarioOrganizador);
+        Assert.Equal(6, eventos[2].IdUsuarioOrganizador);
+        Assert.All(eventos, e => Assert.Equal(EstadoAprobacion.Aprobado, e.EstadoAprobacion));
+    }
+
     private static Proyecto CreateProject(int id, int creatorId, int organizerId, int careerId) => new()
     {
         IdProyecto = id,

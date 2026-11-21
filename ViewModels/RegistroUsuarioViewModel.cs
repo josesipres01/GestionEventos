@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace GestionEventos.ViewModels;
 
@@ -37,4 +38,6 @@ public class RegistroUsuarioViewModel
 
     [Display(Name = "Carrera")]
     public int? IdCarrera { get; set; }
+
+    public IEnumerable<SelectListItem> Carreras { get; set; } = Enumerable.Empty<SelectListItem>();
 }

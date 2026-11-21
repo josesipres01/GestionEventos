@@ -1,0 +1,44 @@
+@model InscripcionEventoViewModel
+@{
+    ViewData["Title"] = "Inscribirse a Evento";
+}
+
+<section class="nexo-form-shell">
+    <div class="mb-4">
+        <div class="nexo-eyebrow">
+            <span class="nexo-eyebrow-dot"></span>
+            <span>INSCRIPCIÓN A EVENTOS · ORDENADO SEGÚN LA BASE DE DATOS</span>
+        </div>
+        <h1 class="nexo-section-title">Inscribirse a Evento</h1>
+        <p class="text-muted mt-2 mb-0">
+            Selecciona el evento universitario al que deseas asistir. La lista desplegable muestra los eventos exactamente en el orden configurado en la base de datos.
+        </p>
+    </div>
+
+    <div class="nexo-panel">
+        <form asp-action="Inscribir" method="post">
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+            <div class="mb-3">
+                <label asp-for="IdEvento" class="nexo-label"></label>
+                <select asp-for="IdEvento" asp-items="Model.Eventos" class="nexo-select"></select>
+                <span asp-validation-for="IdEvento" class="text-danger small"></span>
+            </div>
+
+            <div class="mb-4">
+                <label asp-for="Comentario" class="nexo-label"></label>
+                <textarea asp-for="Comentario" class="nexo-textarea" rows="3" placeholder="Opcional: indica algún comentario o expectativa sobre el evento..."></textarea>
+                <span asp-validation-for="Comentario" class="text-danger small"></span>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2">
+                <button type="submit" class="btn-nexo-primary">Enviar</button>
+                <a class="btn-nexo-outline" asp-action="Catalogo">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

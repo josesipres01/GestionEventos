@@ -31,7 +31,8 @@ public class EventosController(
 
         var carreras = await dbContext.Carreras
             .AsNoTracking()
-            .OrderBy(carrera => carrera.Nombre)
+            .OrderBy(carrera => carrera.Orden == 0 ? int.MaxValue : carrera.Orden)
+            .ThenBy(carrera => carrera.Nombre)
             .ToListAsync();
         var filtroCarrera = idCarrera;
 
@@ -135,6 +136,14 @@ public class EventosController(
         ViewBag.IdCarreraSeleccionada = filtroCarrera;
         ViewBag.FechaDesde = fechaDesde?.ToString("yyyy-MM-dd");
         ViewBag.FechaHasta = fechaHasta?.ToString("yyyy-MM-dd");
+        ViewBag.EventosOrdenadosSelect = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
+            eventos,
+            nameof(Evento.IdEvento),
+            nameof(Evento.Nombre));
+        ViewBag.ProyectosOrdenadosSelect = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
+            proyectos,
+            nameof(Proyecto.IdProyecto),
+            nameof(Proyecto.Nombre));
 
         return View("~/Views/Estudiante/ExplorarCampus.cshtml", eventos);
     }
@@ -160,7 +169,8 @@ public class EventosController(
         var filtroCarrera = idCarrera == 0 ? null : idCarrera ?? usuarioCarreraId;
         var carreras = await dbContext.Carreras
             .AsNoTracking()
-            .OrderBy(carrera => carrera.Nombre)
+            .OrderBy(carrera => carrera.Orden == 0 ? int.MaxValue : carrera.Orden)
+            .ThenBy(carrera => carrera.Nombre)
             .ToListAsync();
 
         var eventosQuery = dbContext.Eventos
@@ -212,7 +222,61 @@ public class EventosController(
         ViewBag.FechaHasta = fechaHasta?.ToString("yyyy-MM-dd");
         ViewBag.EventosRegistradosIds = eventosRegistradosIds;
         ViewBag.EventosInteresadosIds = eventosInteresadosIds;
+        ViewBag.EventosOrdenadosSelect = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
+            eventos,
+            nameof(Evento.IdEvento),
+            nameof(Evento.Nombre));
         return View("~/Views/Estudiante/CatalogoEventos.cshtml", eventos);
+    }
+
+    [Authorize]
+    [HttpGet]
+    public async Task<IActionResult> Inscribir(int? idEvento = null)
+    {
+        var eventosDisponibles = await dbContext.Eventos
+            .AsNoTracking()
+            .Where(e => e.Activo && e.EstadoAprobacion == EstadoAprobacion.Aprobado)
+            .OrderBy(e => e.Orden == 0 ? int.MaxValue : e.Orden)
+            .ThenBy(e => e.FechaHora)
+            .ToListAsync();
+
+        var modelo = new InscripcionEventoViewModel
+        {
+            IdEvento = idEvento ?? (eventosDisponibles.FirstOrDefault()?.IdEvento ?? 0),
+            Eventos = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
+                eventosDisponibles,
+                nameof(Evento.IdEvento),
+                nameof(Evento.Nombre),
+                idEvento)
+        };
+
+        return View("~/Views/Estudiante/InscribirEvento.cshtml", modelo);
+    }
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Inscribir(InscripcionEventoViewModel modelo)
+    {
+        if (!ModelState.IsValid)
+        {
+            var eventosDisponibles = await dbContext.Eventos
+                .AsNoTracking()
+                .Where(e => e.Activo && e.EstadoAprobacion == EstadoAprobacion.Aprobado)
+                .OrderBy(e => e.Orden == 0 ? int.MaxValue : e.Orden)
+                .ThenBy(e => e.FechaHora)
+                .ToListAsync();
+
+            modelo.Eventos = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
+                eventosDisponibles,
+                nameof(Evento.IdEvento),
+                nameof(Evento.Nombre),
+                modelo.IdEvento);
+
+            return View("~/Views/Estudiante/InscribirEvento.cshtml", modelo);
+        }
+
+        return await RegistrarInteres(modelo.IdEvento);
     }
 
     [HttpGet]
@@ -611,9 +675,35 @@ public class EventosController(
             "IdUsuario",
             "Etiqueta");
 
+        var esAdmin = User.IsInRole("Administrador") ||
+            User.IsInRole("Admin") ||
+            await dbContext.Usuarios
+                .AsNoTracking()
+                .Include(u => u.Rol)
+                .AnyAsync(u =>
+                    u.IdUsuario == usuarioId &&
+                    u.Activo &&
+                    (u.IdRol == 3 || u.Rol.Nombre.Contains("Admin")));
+
+        var eventosGestionables = await dbContext.Eventos
+            .AsNoTracking()
+            .Where(e =>
+                esAdmin ||
+                e.IdUsuarioOrganizador == usuarioId ||
+                e.IdUsuarioSolicitante == usuarioId)
+            .OrderBy(e => e.Orden == 0 ? int.MaxValue : e.Orden)
+            .ThenByDescending(e => e.FechaHora)
+            .ToListAsync();
+
         var modelo = new ListaAsistenciaViewModel
         {
             Evento = evento,
+            IdEventoSeleccionado = evento.IdEvento,
+            Eventos = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
+                eventosGestionables,
+                nameof(Evento.IdEvento),
+                nameof(Evento.Nombre),
+                evento.IdEvento),
             Participantes = usuarios.Select(usuario => new ParticipanteAsistenciaViewModel
             {
                 IdUsuario = usuario.IdUsuario,
@@ -793,8 +883,9 @@ public class EventosController(
     [HttpGet]
     public async Task<IActionResult> Crear()
     {
-        await CargarOrganizadoresAsync();
-        return View("~/Views/Estudiante/PublicarEvento.cshtml", new CrearEventoViewModel());
+        var modelo = new CrearEventoViewModel();
+        await CargarOrganizadoresAsync(modelo);
+        return View("~/Views/Estudiante/PublicarEvento.cshtml", modelo);
     }
 
     [Authorize]
@@ -812,18 +903,26 @@ public class EventosController(
             ModelState.AddModelError(nameof(modelo.FechaFin), "La fecha de fin debe ser posterior al inicio.");
         }
 
+        var esOrganizadorOAdmin = await EsOrganizadorOAdminAsync();
+        if (esOrganizadorOAdmin && modelo.IdUsuarioOrganizador <= 0)
+        {
+            modelo.IdUsuarioOrganizador = usuarioId;
+        }
+
         var organizador = await dbContext.Usuarios
             .AsNoTracking()
             .Include(usuario => usuario.Rol)
             .FirstOrDefaultAsync(usuario =>
                 usuario.IdUsuario == modelo.IdUsuarioOrganizador &&
                 usuario.Activo &&
-                (usuario.IdRol == 2 || usuario.Rol.Nombre.Contains("Organizador")));
+                (usuario.IdRol == 2 ||
+                 usuario.Rol.Nombre.Contains("Organizador") ||
+                 (esOrganizadorOAdmin && usuario.IdUsuario == usuarioId)));
         if (organizador is null)
         {
             ModelState.AddModelError(nameof(modelo.IdUsuarioOrganizador), "Selecciona un organizador activo.");
         }
-        else if (organizador.IdUsuario == usuarioId)
+        else if (!esOrganizadorOAdmin && organizador.IdUsuario == usuarioId)
         {
             ModelState.AddModelError(
                 nameof(modelo.IdUsuarioOrganizador),
@@ -834,15 +933,12 @@ public class EventosController(
 
         if (!ModelState.IsValid)
         {
-            await CargarOrganizadoresAsync();
+            await CargarOrganizadoresAsync(modelo);
             return View("~/Views/Estudiante/PublicarEvento.cshtml", modelo);
         }
 
         var imagenUrl = await GuardarImagenEventoAsync(modelo.ImagenArchivo);
-        var maxOrden = await dbContext.Eventos
-            .AsNoTracking()
-            .Select(e => (int?)e.Orden)
-            .MaxAsync() ?? 0;
+        var autoAprobado = esOrganizadorOAdmin && organizador!.IdUsuario == usuarioId;
 
         var nuevoEvento = new Evento
         {
@@ -853,27 +949,33 @@ public class EventosController(
             Cupo = modelo.Cupo,
             Lugar = modelo.Lugar.Trim(),
             ImagenUrl = imagenUrl,
-            Orden = maxOrden > 0 ? maxOrden + 1 : 0,
             IdUsuarioOrganizador = organizador!.IdUsuario,
             IdUsuarioSolicitante = usuarioId,
-            EstadoAprobacion = EstadoAprobacion.Pendiente,
+            EstadoAprobacion = autoAprobado ? EstadoAprobacion.Aprobado : EstadoAprobacion.Pendiente,
             FechaSolicitud = DateTime.UtcNow,
             FechaCreacion = DateTime.UtcNow
         };
 
-        dbContext.Eventos.Add(nuevoEvento);
-        dbContext.Notificaciones.Add(new Notificacion
+        await ServicioOrdenPublicaciones.CrearEventoAsync(dbContext, nuevoEvento);
+        if (!autoAprobado)
         {
-            IdUsuario = nuevoEvento.IdUsuarioOrganizador,
-            Evento = nuevoEvento,
-            Titulo = $"Nueva solicitud de evento: {nuevoEvento.Nombre}",
-            Mensaje = $"{User.Identity?.Name ?? "Un estudiante"} envió un evento para tu revisión.",
-            FechaCreacion = DateTime.UtcNow
-        });
-        await dbContext.SaveChangesAsync();
+            dbContext.Notificaciones.Add(new Notificacion
+            {
+                IdUsuario = nuevoEvento.IdUsuarioOrganizador,
+                IdEvento = nuevoEvento.IdEvento,
+                Titulo = $"Nueva solicitud de evento: {nuevoEvento.Nombre}",
+                Mensaje = $"{User.Identity?.Name ?? "Un estudiante"} envió un evento para tu revisión.",
+                FechaCreacion = DateTime.UtcNow
+            });
+            await dbContext.SaveChangesAsync();
+        }
 
-        TempData["Mensaje"] = "Tu solicitud de evento se envió al organizador para su aprobación.";
-        return RedirectToAction("Index", "Solicitudes");
+        TempData["Mensaje"] = autoAprobado
+            ? "El evento se publicó directamente bajo tu responsabilidad."
+            : "Tu solicitud de evento se envió al organizador para su aprobación.";
+        return autoAprobado
+            ? RedirectToAction(nameof(Detalle), new { id = nuevoEvento.IdEvento })
+            : RedirectToAction("Index", "Solicitudes");
     }
 
     [Authorize]
@@ -1331,14 +1433,19 @@ public class EventosController(
                     (usuario.IdRol == 3 || usuario.Rol.Nombre.Contains("Admin")));
     }
 
-    private async Task CargarOrganizadoresAsync()
+    private async Task CargarOrganizadoresAsync(CrearEventoViewModel? modelo = null)
     {
+        var esOrganizadorOAdmin = await EsOrganizadorOAdminAsync();
+        var usuarioActualId = int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : 0;
+
         var organizadores = await dbContext.Usuarios
             .AsNoTracking()
             .Include(usuario => usuario.Rol)
             .Where(usuario =>
                 usuario.Activo &&
-                (usuario.IdRol == 2 || usuario.Rol.Nombre.Contains("Organizador")))
+                (usuario.IdRol == 2 ||
+                 usuario.Rol.Nombre.Contains("Organizador") ||
+                 (esOrganizadorOAdmin && usuario.IdUsuario == usuarioActualId)))
             .OrderBy(usuario => usuario.Nombres)
             .ThenBy(usuario => usuario.ApellidoPaterno)
             .Select(usuario => new
@@ -1350,9 +1457,17 @@ public class EventosController(
             })
             .ToListAsync();
 
-        ViewBag.Organizadores = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
+        var selectOrganizadores = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
             organizadores,
             "IdUsuario",
-            "NombreCompleto");
+            "NombreCompleto",
+            modelo?.IdUsuarioOrganizador);
+
+        ViewBag.EsOrganizadorOAdmin = esOrganizadorOAdmin;
+        ViewBag.Organizadores = selectOrganizadores;
+        if (modelo is not null)
+        {
+            modelo.Organizadores = selectOrganizadores;
+        }
     }
 }

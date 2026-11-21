@@ -97,11 +97,78 @@ public class ProyectosController(
         ViewBag.ProyectosRegistradosIds = registradosIds;
         ViewBag.ProyectosInteresadosIds = interesadosIds;
         ViewBag.UsuarioActualId = usuarioActualId;
-        ViewBag.Carreras = await dbContext.Carreras.AsNoTracking().OrderBy(carrera => carrera.Nombre).ToListAsync();
+        ViewBag.Carreras = await ObtenerCarrerasCacheAsync();
         ViewBag.IdCarreraSeleccionada = filtroCarrera;
         ViewBag.FechaDesde = fechaDesde?.ToString("yyyy-MM-dd");
         ViewBag.FechaHasta = fechaHasta?.ToString("yyyy-MM-dd");
+        ViewBag.ProyectosOrdenadosSelect = new SelectList(
+            proyectos,
+            nameof(Proyecto.IdProyecto),
+            nameof(Proyecto.Nombre));
         return View("~/Views/Estudiante/CatalogoProyectos.cshtml", proyectos);
+    }
+
+    [Authorize]
+    [HttpGet]
+    public async Task<IActionResult> Inscribir(int? idProyecto = null)
+    {
+        var proyectosDisponibles = await dbContext.Proyectos
+            .AsNoTracking()
+            .Where(p => p.Activo && p.EstadoAprobacion == EstadoAprobacion.Aprobado)
+            .OrderBy(p => p.Orden == 0 ? int.MaxValue : p.Orden)
+            .ThenByDescending(p => p.FechaPublicacion)
+            .ToListAsync();
+
+        var carreras = await ObtenerCarrerasCacheAsync();
+
+        var modelo = new InscripcionProyectoViewModel
+        {
+            IdProyecto = idProyecto ?? (proyectosDisponibles.FirstOrDefault()?.IdProyecto ?? 0),
+            Proyectos = new SelectList(
+                proyectosDisponibles,
+                nameof(Proyecto.IdProyecto),
+                nameof(Proyecto.Nombre),
+                idProyecto),
+            Carreras = new SelectList(
+                carreras,
+                nameof(Carrera.IdCarrera),
+                nameof(Carrera.Nombre))
+        };
+
+        return View("~/Views/Estudiante/InscribirProyecto.cshtml", modelo);
+    }
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Inscribir(InscripcionProyectoViewModel modelo)
+    {
+        if (!ModelState.IsValid)
+        {
+            var proyectosDisponibles = await dbContext.Proyectos
+                .AsNoTracking()
+                .Where(p => p.Activo && p.EstadoAprobacion == EstadoAprobacion.Aprobado)
+                .OrderBy(p => p.Orden == 0 ? int.MaxValue : p.Orden)
+                .ThenByDescending(p => p.FechaPublicacion)
+                .ToListAsync();
+
+            var carreras = await ObtenerCarrerasCacheAsync();
+
+            modelo.Proyectos = new SelectList(
+                proyectosDisponibles,
+                nameof(Proyecto.IdProyecto),
+                nameof(Proyecto.Nombre),
+                modelo.IdProyecto);
+            modelo.Carreras = new SelectList(
+                carreras,
+                nameof(Carrera.IdCarrera),
+                nameof(Carrera.Nombre),
+                modelo.IdCarrera);
+
+            return View("~/Views/Estudiante/InscribirProyecto.cshtml", modelo);
+        }
+
+        return await RegistrarInteres(modelo.IdProyecto);
     }
 
     [Authorize]
@@ -234,8 +301,9 @@ public class ProyectosController(
     [HttpGet]
     public async Task<IActionResult> Crear()
     {
-        await CargarCatalogosAsync();
-        return View("~/Views/Estudiante/PublicarProyecto.cshtml", new CrearProyectoViewModel());
+        var modelo = new CrearProyectoViewModel();
+        await CargarCatalogosAsync(modelo);
+        return View("~/Views/Estudiante/PublicarProyecto.cshtml", modelo);
     }
 
     [Authorize]
@@ -259,13 +327,21 @@ public class ProyectosController(
             ModelState.AddModelError(nameof(modelo.IdCarrera), "Selecciona una carrera válida.");
         }
 
+        var esOrganizadorOAdmin = await EsOrganizadorOAdminAsync();
+        if (esOrganizadorOAdmin && modelo.IdUsuarioOrganizador <= 0)
+        {
+            modelo.IdUsuarioOrganizador = usuarioId;
+        }
+
         var responsable = await dbContext.Usuarios
             .AsNoTracking()
             .Include(usuario => usuario.Rol)
             .FirstOrDefaultAsync(usuario =>
                 usuario.IdUsuario == modelo.IdUsuarioOrganizador &&
                 usuario.Activo &&
-                (usuario.IdRol == 2 || usuario.Rol.Nombre.Contains("Organizador")));
+                (usuario.IdRol == 2 ||
+                 usuario.Rol.Nombre.Contains("Organizador") ||
+                 (esOrganizadorOAdmin && usuario.IdUsuario == usuarioId)));
 
         if (responsable is null)
         {
@@ -273,7 +349,7 @@ public class ProyectosController(
                 nameof(modelo.IdUsuarioOrganizador),
                 "Selecciona un usuario válido con rol Organizador.");
         }
-        else if (responsable.IdUsuario == usuarioId)
+        else if (!esOrganizadorOAdmin && responsable.IdUsuario == usuarioId)
         {
             ModelState.AddModelError(
                 nameof(modelo.IdUsuarioOrganizador),
@@ -284,15 +360,12 @@ public class ProyectosController(
 
         if (!ModelState.IsValid)
         {
-            await CargarCatalogosAsync();
+            await CargarCatalogosAsync(modelo);
             return View("~/Views/Estudiante/PublicarProyecto.cshtml", modelo);
         }
 
         var imagenUrl = await GuardarImagenProyectoAsync(modelo.ImagenArchivo);
-        var maxOrden = await dbContext.Proyectos
-            .AsNoTracking()
-            .Select(p => (int?)p.Orden)
-            .MaxAsync() ?? 0;
+        var autoAprobado = esOrganizadorOAdmin && responsable!.IdUsuario == usuarioId;
 
         var nuevoProyecto = new Proyecto
         {
@@ -305,26 +378,32 @@ public class ProyectosController(
             FechaFin = modelo.FechaFin.Date,
             Cupo = modelo.Cupo,
             ImagenUrl = imagenUrl,
-            Orden = maxOrden > 0 ? maxOrden + 1 : 0,
             IdCarrera = modelo.IdCarrera,
             FechaPublicacion = DateTime.UtcNow,
             FechaSolicitud = DateTime.UtcNow,
-            EstadoAprobacion = EstadoAprobacion.Pendiente
+            EstadoAprobacion = autoAprobado ? EstadoAprobacion.Aprobado : EstadoAprobacion.Pendiente
         };
 
-        dbContext.Proyectos.Add(nuevoProyecto);
-        dbContext.Notificaciones.Add(new Notificacion
+        await ServicioOrdenPublicaciones.CrearProyectoAsync(dbContext, nuevoProyecto);
+        if (!autoAprobado)
         {
-            IdUsuario = nuevoProyecto.IdUsuarioOrganizador.Value,
-            Proyecto = nuevoProyecto,
-            Titulo = $"Nueva solicitud de proyecto: {nuevoProyecto.Nombre}",
-            Mensaje = $"{User.Identity?.Name ?? "Un estudiante"} envió un proyecto para tu revisión.",
-            FechaCreacion = DateTime.UtcNow
-        });
-        await dbContext.SaveChangesAsync();
+            dbContext.Notificaciones.Add(new Notificacion
+            {
+                IdUsuario = nuevoProyecto.IdUsuarioOrganizador.Value,
+                IdProyecto = nuevoProyecto.IdProyecto,
+                Titulo = $"Nueva solicitud de proyecto: {nuevoProyecto.Nombre}",
+                Mensaje = $"{User.Identity?.Name ?? "Un estudiante"} envió un proyecto para tu revisión.",
+                FechaCreacion = DateTime.UtcNow
+            });
+            await dbContext.SaveChangesAsync();
+        }
 
-        TempData["Mensaje"] = "Tu solicitud de proyecto se envió al organizador para su aprobación.";
-        return RedirectToAction("Index", "Solicitudes");
+        TempData["Mensaje"] = autoAprobado
+            ? "El proyecto se publicó directamente bajo tu responsabilidad."
+            : "Tu solicitud de proyecto se envió al organizador para su aprobación.";
+        return autoAprobado
+            ? RedirectToAction(nameof(Detalle), new { id = nuevoProyecto.IdProyecto })
+            : RedirectToAction("Index", "Solicitudes");
     }
 
     [Authorize]
@@ -355,19 +434,21 @@ public class ProyectosController(
             return RedirectToAction("AccesoDenegado", "Cuenta");
         }
 
+        var esOrganizadorOAdmin = await EsOrganizadorOAdminAsync();
         var responsables = await dbContext.Usuarios
             .AsNoTracking()
             .Include(u => u.Rol)
             .Where(u =>
                 u.Activo &&
-                (u.IdRol == 2 || u.Rol.Nombre.Contains("Organizador")))
+                (u.IdRol == 2 ||
+                 u.Rol.Nombre.Contains("Organizador") ||
+                 (esOrganizadorOAdmin && u.IdUsuario == usuarioId) ||
+                 u.IdUsuario == proyecto.IdUsuarioOrganizador))
             .ToListAsync();
 
         var responsableActual = responsables.FirstOrDefault(u => u.IdUsuario == proyecto.IdUsuarioOrganizador);
 
-        await CargarCatalogosAsync();
-
-        return View("~/Views/Estudiante/EditarProyecto.cshtml", new EditarProyectoViewModel
+        var modelo = new EditarProyectoViewModel
         {
             IdProyecto = proyecto.IdProyecto,
             Nombre = proyecto.Nombre,
@@ -379,7 +460,10 @@ public class ProyectosController(
             FechaFin = proyecto.FechaFin.Date,
             Cupo = proyecto.Cupo,
             ImagenUrlActual = proyecto.ImagenUrl
-        });
+        };
+        await CargarCatalogosAsync(modeloEditar: modelo);
+
+        return View("~/Views/Estudiante/EditarProyecto.cshtml", modelo);
     }
 
     [Authorize]
@@ -419,13 +503,28 @@ public class ProyectosController(
             ModelState.AddModelError(nameof(modelo.IdCarrera), "Selecciona una carrera válida.");
         }
 
+        var esOrganizadorOAdmin = await EsOrganizadorOAdminAsync();
+        if (esOrganizadorOAdmin && modelo.IdUsuarioOrganizador <= 0)
+        {
+            modelo.IdUsuarioOrganizador = usuarioId;
+        }
+
         var responsable = await dbContext.Usuarios
             .AsNoTracking()
             .Include(usuario => usuario.Rol)
             .FirstOrDefaultAsync(usuario =>
                 usuario.IdUsuario == modelo.IdUsuarioOrganizador &&
                 usuario.Activo &&
-                (usuario.IdRol == 2 || usuario.Rol.Nombre.Contains("Organizador")));
+                (usuario.IdRol == 2 ||
+                 usuario.Rol.Nombre.Contains("Organizador") ||
+                 (esOrganizadorOAdmin && usuario.IdUsuario == usuarioId)));
+
+        var creadorEsOrganizadorOAdmin = await dbContext.Usuarios
+            .AsNoTracking()
+            .Include(u => u.Rol)
+            .AnyAsync(u =>
+                u.IdUsuario == proyecto.IdUsuarioCreador &&
+                (u.IdRol == 2 || u.IdRol == 3 || u.Rol.Nombre.Contains("Organizador") || u.Rol.Nombre.Contains("Admin")));
 
         if (responsable is null)
         {
@@ -433,7 +532,7 @@ public class ProyectosController(
                 nameof(modelo.IdUsuarioOrganizador),
                 "Selecciona un usuario válido con rol Organizador.");
         }
-        else if (responsable.IdUsuario == proyecto.IdUsuarioCreador)
+        else if (!esOrganizadorOAdmin && !creadorEsOrganizadorOAdmin && responsable.IdUsuario == proyecto.IdUsuarioCreador)
         {
             ModelState.AddModelError(
                 nameof(modelo.IdUsuarioOrganizador),
@@ -445,7 +544,7 @@ public class ProyectosController(
         if (!ModelState.IsValid)
         {
             modelo.ImagenUrlActual = proyecto.ImagenUrl;
-            await CargarCatalogosAsync();
+            await CargarCatalogosAsync(modeloEditar: modelo);
             return View("~/Views/Estudiante/EditarProyecto.cshtml", modelo);
         }
 
@@ -465,7 +564,7 @@ public class ProyectosController(
         {
             await transaction.RollbackAsync();
             modelo.ImagenUrlActual = proyecto.ImagenUrl;
-            await CargarCatalogosAsync();
+            await CargarCatalogosAsync(modeloEditar: modelo);
             return View("~/Views/Estudiante/EditarProyecto.cshtml", modelo);
         }
 
@@ -862,9 +961,35 @@ public class ProyectosController(
 
         ViewBag.UsuariosDisponibles = new SelectList(usuariosDisponibles, "IdUsuario", "Etiqueta");
 
+        var esAdmin = User.IsInRole("Administrador") ||
+            User.IsInRole("Admin") ||
+            await dbContext.Usuarios
+                .AsNoTracking()
+                .Include(u => u.Rol)
+                .AnyAsync(u =>
+                    u.IdUsuario == usuarioId &&
+                    u.Activo &&
+                    (u.IdRol == 3 || u.Rol.Nombre.Contains("Admin")));
+
+        var proyectosGestionables = await dbContext.Proyectos
+            .AsNoTracking()
+            .Where(p =>
+                esAdmin ||
+                p.IdUsuarioOrganizador == usuarioId ||
+                p.IdUsuarioCreador == usuarioId)
+            .OrderBy(p => p.Orden == 0 ? int.MaxValue : p.Orden)
+            .ThenByDescending(p => p.FechaPublicacion)
+            .ToListAsync();
+
         var modelo = new ListaParticipacionProyectoViewModel
         {
             Proyecto = proyecto,
+            IdProyectoSeleccionado = proyecto.IdProyecto,
+            Proyectos = new SelectList(
+                proyectosGestionables,
+                nameof(Proyecto.IdProyecto),
+                nameof(Proyecto.Nombre),
+                proyecto.IdProyecto),
             Participantes = usuarios.Select(usuario => new ParticipanteAsistenciaViewModel
             {
                 IdUsuario = usuario.IdUsuario,
@@ -1203,25 +1328,61 @@ public class ProyectosController(
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
             return await dbContext.Carreras
                 .AsNoTracking()
-                .OrderBy(carrera => carrera.Nombre)
+                .OrderBy(carrera => carrera.Orden == 0 ? int.MaxValue : carrera.Orden)
+                .ThenBy(carrera => carrera.Nombre)
                 .ToListAsync();
         }) ?? new List<Carrera>();
     }
 
-    private async Task CargarCatalogosAsync()
+    private async Task<bool> EsOrganizadorOAdminAsync()
     {
+        if (User.IsInRole("Organizador/Docente") ||
+            User.IsInRole("Organizador") ||
+            User.IsInRole("Administrador") ||
+            User.IsInRole("Admin"))
+        {
+            return true;
+        }
+
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
+        {
+            return false;
+        }
+
+        return await dbContext.Usuarios
+            .AsNoTracking()
+            .Include(usuario => usuario.Rol)
+            .AnyAsync(usuario =>
+                usuario.IdUsuario == usuarioId &&
+                usuario.Activo &&
+                (usuario.IdRol == 2 ||
+                 usuario.IdRol == 3 ||
+                 usuario.Rol.Nombre.Contains("Organizador") ||
+                 usuario.Rol.Nombre.Contains("Admin")));
+    }
+
+    private async Task CargarCatalogosAsync(
+        CrearProyectoViewModel? modeloCrear = null,
+        EditarProyectoViewModel? modeloEditar = null)
+    {
+        var esOrganizadorOAdmin = await EsOrganizadorOAdminAsync();
+        var usuarioActualId = int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : 0;
+
         var carreras = await ObtenerCarrerasCacheAsync();
-        ViewBag.Carreras = new SelectList(
+        var selectCarreras = new SelectList(
             carreras,
             nameof(Carrera.IdCarrera),
-            nameof(Carrera.Nombre));
+            nameof(Carrera.Nombre),
+            modeloCrear?.IdCarrera ?? modeloEditar?.IdCarrera);
 
         var responsables = await dbContext.Usuarios
             .AsNoTracking()
             .Include(usuario => usuario.Rol)
             .Where(usuario =>
                 usuario.Activo &&
-                (usuario.IdRol == 2 || usuario.Rol.Nombre.Contains("Organizador")))
+                (usuario.IdRol == 2 ||
+                 usuario.Rol.Nombre.Contains("Organizador") ||
+                 (esOrganizadorOAdmin && usuario.IdUsuario == usuarioActualId)))
             .OrderBy(usuario => usuario.Nombres)
             .ThenBy(usuario => usuario.ApellidoPaterno)
             .Select(usuario => new
@@ -1233,9 +1394,26 @@ public class ProyectosController(
             })
             .ToListAsync();
 
-        ViewBag.Responsables = new SelectList(
+        var selectResponsables = new SelectList(
             responsables,
             "IdUsuario",
-            "NombreCompleto");
+            "NombreCompleto",
+            modeloCrear?.IdUsuarioOrganizador ?? modeloEditar?.IdUsuarioOrganizador);
+
+        ViewBag.EsOrganizadorOAdmin = esOrganizadorOAdmin;
+        ViewBag.Carreras = selectCarreras;
+        ViewBag.Responsables = selectResponsables;
+
+        if (modeloCrear is not null)
+        {
+            modeloCrear.Carreras = selectCarreras;
+            modeloCrear.Responsables = selectResponsables;
+        }
+
+        if (modeloEditar is not null)
+        {
+            modeloEditar.Carreras = selectCarreras;
+            modeloEditar.Responsables = selectResponsables;
+        }
     }
 }

@@ -14,6 +14,8 @@ public class Carrera
     [StringLength(120)]
     public string Nombre { get; set; } = string.Empty;
 
+    public int Orden { get; set; }
+
     public ICollection<Usuario> Usuarios { get; set; } = new List<Usuario>();
     public ICollection<Proyecto> Proyectos { get; set; } = new List<Proyecto>();
 }

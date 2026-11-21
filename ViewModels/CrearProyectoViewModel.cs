@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace GestionEventos.ViewModels;
 
@@ -14,7 +15,6 @@ public class CrearProyectoViewModel
     [Display(Name = "Descripción")]
     public string Descripcion { get; set; } = string.Empty;
 
-    [Range(1, int.MaxValue, ErrorMessage = "Selecciona un responsable.")]
     [Display(Name = "Organizador responsable")]
     public int IdUsuarioOrganizador { get; set; }
 
@@ -44,4 +44,8 @@ public class CrearProyectoViewModel
 
     [Display(Name = "Imagen de miniatura (opcional)")]
     public IFormFile? ImagenArchivo { get; set; }
+
+    public IEnumerable<SelectListItem> Responsables { get; set; } = Enumerable.Empty<SelectListItem>();
+
+    public IEnumerable<SelectListItem> Carreras { get; set; } = Enumerable.Empty<SelectListItem>();
 }

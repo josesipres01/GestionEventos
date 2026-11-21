@@ -36,15 +36,15 @@
             <div class="row g-3 mb-3">
                 <div class="col-md-6">
                     <label asp-for="IdUsuarioOrganizador" class="nexo-label"></label>
-                    <select asp-for="IdUsuarioOrganizador" asp-items="ViewBag.Responsables" class="nexo-select">
-                        <option value="">Selecciona un organizador responsable</option>
+                    <select asp-for="IdUsuarioOrganizador" asp-items="Model.Responsables" class="nexo-select">
+                        <option value="0">Selecciona un organizador responsable</option>
                     </select>
                     <span asp-validation-for="IdUsuarioOrganizador" class="text-danger small"></span>
                 </div>
 
                 <div class="col-md-6">
                     <label asp-for="IdCarrera" class="nexo-label"></label>
-                    <select asp-for="IdCarrera" asp-items="ViewBag.Carreras" class="nexo-select">
+                    <select asp-for="IdCarrera" asp-items="Model.Carreras" class="nexo-select">
                         <option value="">Selecciona una carrera o departamento</option>
                     </select>
                     <span asp-validation-for="IdCarrera" class="text-danger small"></span>

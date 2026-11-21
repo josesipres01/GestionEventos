@@ -60,9 +60,19 @@
                 <span>Hasta</span>
                 <input type="date" name="fechaHasta" class="nexo-input" value="@ViewBag.FechaHasta" />
             </label>
+            <label>
+                <span>Evento (orden en BD)</span>
+                <select class="nexo-select"
+                        asp-items="ViewBag.EventosOrdenadosSelect"
+                        aria-label="Seleccionar evento ordenado según la base de datos"
+                        onchange="if (this.value) window.location.href = '@Url.Action("Detalle", "Eventos")/' + this.value;">
+                    <option value="">Ir a evento...</option>
+                </select>
+            </label>
             <div class="d-flex align-items-center gap-2">
                 <button type="submit" class="btn-nexo-primary">Aplicar filtros</button>
                 <a asp-action="Catalogo" class="btn-nexo-outline">Limpiar</a>
+                <a asp-action="Inscribir" class="btn-nexo-outline">Inscribir por lista</a>
             </div>
         </form>
         <div class="nexo-filter-toolbar">

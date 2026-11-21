@@ -1,0 +1,52 @@
+@model InscripcionProyectoViewModel
+@{
+    ViewData["Title"] = "Inscribirse a Proyecto";
+}
+
+<section class="nexo-form-shell">
+    <div class="mb-4">
+        <div class="nexo-eyebrow">
+            <span class="nexo-eyebrow-dot"></span>
+            <span>COLABORACIÓN EN PROYECTOS · ORDENADO SEGÚN LA BASE DE DATOS</span>
+        </div>
+        <h1 class="nexo-section-title">Inscribirse a Proyecto</h1>
+        <p class="text-muted mt-2 mb-0">
+            Selecciona el proyecto académico en el que deseas colaborar. Las listas desplegables muestran los proyectos y carreras exactamente en el orden configurado en la base de datos.
+        </p>
+    </div>
+
+    <div class="nexo-panel">
+        <form asp-action="Inscribir" method="post">
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+            <div class="mb-3">
+                <label asp-for="IdProyecto" class="nexo-label"></label>
+                <select asp-for="IdProyecto" asp-items="Model.Proyectos" class="nexo-select"></select>
+                <span asp-validation-for="IdProyecto" class="text-danger small"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="IdCarrera" class="nexo-label"></label>
+                <select asp-for="IdCarrera" asp-items="Model.Carreras" class="nexo-select">
+                    <option value="">Todas las carreras</option>
+                </select>
+                <span asp-validation-for="IdCarrera" class="text-danger small"></span>
+            </div>
+
+            <div class="mb-4">
+                <label asp-for="Comentario" class="nexo-label"></label>
+                <textarea asp-for="Comentario" class="nexo-textarea" rows="3" placeholder="Opcional: describe cómo te gustaría colaborar en este proyecto..."></textarea>
+                <span asp-validation-for="Comentario" class="text-danger small"></span>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2">
+                <button type="submit" class="btn-nexo-primary">Enviar</button>
+                <a class="btn-nexo-outline" asp-action="Index">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

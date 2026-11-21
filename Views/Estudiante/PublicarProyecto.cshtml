@@ -1,6 +1,14 @@
 @model CrearProyectoViewModel
 @{
     ViewData["Title"] = "Publicar proyecto";
+    var rolActual = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "";
+    var esOrganizadorOAdmin = (ViewBag.EsOrganizadorOAdmin as bool? ?? false) ||
+        User.IsInRole("Organizador") ||
+        User.IsInRole("Organizador/Docente") ||
+        User.IsInRole("Administrador") ||
+        User.IsInRole("Admin") ||
+        rolActual.Contains("Organizador", StringComparison.OrdinalIgnoreCase) ||
+        rolActual.Contains("Admin", StringComparison.OrdinalIgnoreCase);
 }
 
 <section class="nexo-form-shell">
@@ -34,18 +42,24 @@
             <div class="row g-3 mb-3">
                 <div class="col-md-6">
                     <label asp-for="IdUsuarioOrganizador" class="nexo-label"></label>
-                    <select asp-for="IdUsuarioOrganizador" asp-items="ViewBag.Responsables" class="nexo-select">
-                        <option value="">Selecciona un organizador responsable</option>
+                    <select asp-for="IdUsuarioOrganizador" asp-items="Model.Responsables" class="nexo-select">
+                        <option value="0">
+                            @(esOrganizadorOAdmin
+                                ? $"Por defecto: {User.Identity?.Name ?? "Mi cuenta"} (o selecciona un organizador)"
+                                : "Selecciona un organizador responsable")
+                        </option>
                     </select>
                     <span asp-validation-for="IdUsuarioOrganizador" class="text-danger small"></span>
                     <div class="form-text text-muted small mt-1">
-                        Solo pueden asignarse usuarios con rol Organizador.
+                        @(esOrganizadorOAdmin
+                            ? "Si no seleccionas uno (o eliges tu nombre), quedarás tú como responsable por defecto."
+                            : "Solo pueden asignarse usuarios con rol Organizador.")
                     </div>
                 </div>
 
                 <div class="col-md-6">
                     <label asp-for="IdCarrera" class="nexo-label"></label>
-                    <select asp-for="IdCarrera" asp-items="ViewBag.Carreras" class="nexo-select">
+                    <select asp-for="IdCarrera" asp-items="Model.Carreras" class="nexo-select">
                         <option value="">Selecciona una carrera o departamento</option>
                     </select>
                     <span asp-validation-for="IdCarrera" class="text-danger small"></span>
